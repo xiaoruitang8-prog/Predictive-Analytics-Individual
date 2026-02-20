@@ -7,16 +7,29 @@ Binary classification of customer churn (`Exited` column) using the **Churn Mode
 
 ## Data access
 
-The dataset is **not included** in this repository. To reproduce:
+The dataset is **not included** in this repository (excluded via `.gitignore`).
 
-1. Obtain `Churn_Modelling.xlsx` (e.g. from the Kaggle "Bank Customer Churn" dataset).
-2. Place the file at `data/Churn_Modelling.xlsx`.
+To set up the data:
+
+1. Download the Excel file from Kaggle:
+   <https://www.kaggle.com/datasets/shantanudhakadd/bank-customer-churn-prediction/data>
+2. Rename the file (if needed) to **exactly** `Churn_Modelling.xlsx`.
+3. Place it at: `data/Churn_Modelling.xlsx`
+
+Sanity check — run this from the repo root:
+
+```bash
+python -c "import pandas as pd; df = pd.read_excel('data/Churn_Modelling.xlsx'); print(f'Loaded {len(df)} rows, {len(df.columns)} columns')"
+```
+
+If the file is missing, every script will raise a clear error with download instructions.
 
 ## Repository structure
 
 ```
 data/               <- Place Churn_Modelling.xlsx here (git-ignored)
 src/
+  data_loader.py    <- Shared data-loading utility (file check + error msg)
   01_eda.py         <- Exploratory data analysis
   02_modelling.py   <- Pipeline, model selection, final evaluation
   run_all.py        <- Single entry point to reproduce everything
