@@ -2,7 +2,7 @@
 
 ## 2A  EDA Approach
 
-Before any modelling or preprocessing, a visual EDA was conducted to
+Before any modelling or preprocessing, a visual Exploratory Data Analysis (EDA) was conducted to
 understand the dataset's structure, distributions, class balance, and
 potential data-quality issues.  All analysis was performed on the **raw
 14-column dataframe** (no ID-column drop — that is deferred to Task 3,
@@ -142,7 +142,7 @@ Confirm the percentages on the bars match the output of the command above.
 > The dataset contains **[N_rows]** customers.  **[retained_pct]%** are
 > retained (`Exited = 0`) and **[churn_pct]%** churned (`Exited = 1`).
 > This confirms a moderately imbalanced dataset, justifying the use of
-> PR-AUC as the primary metric (Section 1C).
+> Precision–Recall Area Under the Curve (PR-AUC) as the primary metric (Section 1C).
 
 ---
 
@@ -176,7 +176,7 @@ Confirm the rates shown on each subplot match the groupby outputs.
 
 *What to look at.*  Side-by-side boxplots of each continuous feature split
 by `Exited` (0 vs 1).  Look for distributional shifts: features where
-the median, IQR, or outlier pattern differs between churners and
+the median, interquartile range (IQR), or outlier pattern differs between churners and
 non-churners are likely informative predictors.  Outlier dots beyond
 the whiskers flag extreme values.
 
@@ -264,13 +264,13 @@ details belong in Task 3 (data preparation) and Task 4 (modelling).
 | 4 | `NumOfProducts` rare categories (3, 4) with very few rows | Monitor for instability in cross-validation; consider grouping 3+ into one bin | Task 3 |
 | 5 | Geography has different churn rates | Ensure one-hot or ordinal encoding preserves this signal | Task 3 |
 | 6 | `Gender` churn-rate gap | Include `Gender` as a feature; monitor fairness metrics post-modelling | Task 4 |
-| 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for LogReg/MLP; use tree-based models or splines to capture non-linear life-stage effects | Task 3 / 4 |
+| 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for Logistic Regression (LogReg) / Multi-Layer Perceptron (MLP); use tree-based models or splines to capture non-linear life-stage effects | Task 3 / 4 |
 | 8 | No missing values (if confirmed) | No imputation step required in pipeline | Task 3 |
 | 9 | `EstimatedSalary` roughly uniform, near-identical across classes | Low predictive power expected — keep in model but note if feature importance is near zero; may add noise, so regularisation or feature selection should be applied | Task 4 |
 | 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons | — |
 | 11 | `Balance` heavy-tailed with extreme high values | Apply `log1p` transform or robust scaling to prevent logistic regression and distance-based models from being pulled by extreme balance values | Task 3 |
 | 12 | `CreditScore` low-end outliers (~400) with weak class separation | Monitor feature importance; consider robust scaling but expect limited contribution on its own | Task 3 / 4 |
-| 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply regularisation (L1/L2) or feature selection to prevent low-signal features from degrading model performance | Task 4 |
+| 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply L1 (Lasso) / L2 (Ridge) regularisation or feature selection to prevent low-signal features from degrading model performance | Task 4 |
 
 ---
 
