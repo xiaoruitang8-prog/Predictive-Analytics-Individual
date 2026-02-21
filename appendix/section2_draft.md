@@ -83,14 +83,15 @@ Confirm counts match the visual and that the total matches
 ### 2B.3  Plot 3 — Numeric Distributions
 
 *What to look at.*  Histograms (or KDE plots) for each numeric feature:
-`CreditScore`, `Age`, `Tenure`, `Balance`, `EstimatedSalary`,
-`NumOfProducts`.  Look for skewness, multi-modality, unexpected ranges,
-and potential outliers.
+`CreditScore`, `Age`, `Tenure`, `Balance`, `EstimatedSalary`.
+Look for skewness, multi-modality, unexpected ranges,
+and potential outliers.  (`NumOfProducts` is discrete and examined
+separately in Plot 10.)
 
 *Dataframe validation.*
 ```python
 df[["CreditScore", "Age", "Tenure", "Balance",
-    "NumOfProducts", "EstimatedSalary"]].describe()
+    "EstimatedSalary"]].describe()
 ```
 Confirm min/max/mean align with what the histograms show.
 
@@ -105,8 +106,6 @@ Confirm min/max/mean align with what the histograms show.
 >   0–**[tenure_max]** years.
 > - `EstimatedSalary`: appears roughly **[salary_shape]**-distributed
 >   between **[salary_min]** and **[salary_max]**.
-> - `NumOfProducts`: discrete, most customers hold **[modal_products]**
->   product(s).
 
 ---
 
