@@ -10,7 +10,7 @@ data preparation).  Each plot cell explicitly selects the columns it needs
 so that identifier columns (`RowNumber`, `CustomerId`, `Surname`) do not
 pollute numeric or categorical analyses.
 
-**Scope.**  Six visual checks, ordered to match the coursework rubric
+**Scope.**  Five visual checks, ordered to match the coursework rubric
 sequence (distributions → missingness → leakage risks → class imbalance →
 outliers):
 
@@ -20,20 +20,26 @@ outliers):
 | 2 | Missingness check | Are there any null or missing values? | `outputs/eda_02_missingness.png` |
 | 3 | Correlation heatmap (+ leakage check) | Which features correlate with each other or the target? Does any feature have suspiciously high predictive power? | `outputs/eda_03_correlation_heatmap.png` |
 | 4 | Target class balance | How imbalanced is `Exited`? | `outputs/eda_04_target_balance.png` |
-| 5 | Churn rate by category | Does churn rate differ across Geography or Gender? | `outputs/eda_05_churn_by_category.png` |
-| 6 | Boxplots by churn | How do numeric feature distributions and outliers differ between churners and non-churners? | `outputs/eda_06_boxplots_by_churn.png` |
+| 5 | Boxplots by churn | How do numeric feature distributions and outliers differ between churners and non-churners? | `outputs/eda_05_boxplots_by_churn.png` |
 
 **What was consolidated.**  The original 10-plot plan (Decision #10)
-included separate Geography / Gender churn-rate plots (merged into Plot 5),
-a standalone zero-balance segment chart (the spike is visible in Plot 1),
-a separate leakage bar chart (absorbed into Plot 3's heatmap + print
-output), and a NumOfProducts-vs-churn plot (patterns surfaced via
-`describe()` and the heatmap).  See Decision #15.
+included separate Geography / Gender churn-rate plots, a standalone
+zero-balance segment chart (the spike is visible in Plot 1), a separate
+leakage bar chart (absorbed into Plot 3's heatmap + print output), and a
+NumOfProducts-vs-churn plot (patterns surfaced via `describe()` and the
+heatmap).  A sixth plot (churn rate by categorical features) was also
+dropped after checking the rubric — it is not a required item, and
+categorical composition is already covered by `df.describe(include="all")`
+in the notebook preamble (see Decisions #15, #16, #17).
 
 **Tooling.**  All plots use `matplotlib` and `seaborn` in a Jupyter
 notebook, saved to `outputs/` at 150 dpi for inclusion as coursework
 evidence.  No `src/` imports are used — each cell is self-contained
-(see Decision Register #12).
+(see Decision Register #12).  The notebook preamble uses
+`df.describe(include="all")` so that categorical features (Geography,
+Gender) are summarised in the statistical overview without requiring a
+dedicated plot — their discrete counts add little beyond what
+`value_counts()` already shows (see Decision #17).
 
 ---
 
@@ -146,33 +152,7 @@ Confirm the percentages on the bars match the output of the command above.
 
 ---
 
-### 2B.5  Plot 5 — Churn Rate by Category
-
-*What to look at.*  Two side-by-side bar charts: churn rate by
-`Geography` (France, Germany, Spain) and churn rate by `Gender`
-(Male, Female).  Look for categories with disproportionately high or low
-churn.
-
-*Dataframe validation.*
-```python
-df.groupby("Geography")["Exited"].mean()
-df.groupby("Gender")["Exited"].mean()
-```
-Confirm the rates shown on each subplot match the groupby outputs.
-
-*Interpretation (fill after running).*
-> **Geography:** France **[fr_rate]%**, Germany **[de_rate]%**,
-> Spain **[es_rate]%**.  **[highest_country]** has the highest churn rate
-> at **[highest_rate]%**, roughly **[comparison]** the rate in
-> **[lowest_country]**.
->
-> **Gender:** Female **[f_rate]%**, Male **[m_rate]%**.
-> **[higher_gender]** customers churn at a **[diff_description]** higher
-> rate.  This is a potential fairness consideration (Section 1C).
-
----
-
-### 2B.6  Plot 6 — Boxplots by Churn
+### 2B.5  Plot 5 — Boxplots by Churn
 
 *What to look at.*  Side-by-side boxplots of each continuous feature split
 by `Exited` (0 vs 1).  Look for distributional shifts: features where
@@ -243,11 +223,11 @@ dataset.
 | 5 | **`Surname` cardinality**: high-cardinality string column that would need encoding or removal | `df["Surname"].nunique()` | [confirmed / not confirmed] |
 | 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
 | 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | correlation print output below Plot 3 | [confirmed / not confirmed] |
-| 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — see Plot 5 | [confirmed / not confirmed] |
-| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 6 | **Confirmed** — many values above ~70 visible beyond the upper whisker in both classes; robust scaling or winsorisation recommended for linear models |
+| 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — visible in `df.describe(include="all")` | [confirmed / not confirmed] |
+| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 5 | **Confirmed** — many values above ~70 visible beyond the upper whisker in both classes; robust scaling or winsorisation recommended for linear models |
 | 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Plot 1 | [confirmed / not confirmed] |
 | 11 | **Tenure range**: is 0 a valid value or does it indicate missing data? | `df["Tenure"].value_counts().sort_index()` | [confirmed / not confirmed] |
-| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Plot 1; boxplots nearly identical across classes in Plot 6 | **Confirmed** — roughly uniform with near-identical churned/retained distributions; low predictive power expected |
+| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Plot 1; boxplots nearly identical across classes in Plot 5 | **Confirmed** — roughly uniform with near-identical churned/retained distributions; low predictive power expected |
 
 ---
 
@@ -283,9 +263,9 @@ the notebook and cross-checking against the raw data.
 | Step | What the Agent Did | What I Verified / Corrected | Evidence |
 |------|--------------------|-----------------------------|----------|
 | EDA plan and plot list | Agent initially proposed 10-plot scope (Log #9, Decision #10). After user review, consolidated to 6 plots in rubric order (Log #15, Decision #15). Subsequently dropped "Churn rate by categorical features" plot after checking rubric requirements, reducing to final 5-plot scope (Log #16, Decision #16) | I identified the 10-plot plan was over-engineered; requested consolidation to rubric order. Later checked the rubric and confirmed churn-rate-by-category is not a required item, so dropped it to keep the EDA concise. Verified final 5 plots cover all rubric areas: distributions, missingness, leakage risks, class imbalance, outliers | Appendix: Agent Log #9, #15, #16; Decision Register #10, #15, #16 |
-| Notebook preamble | Agent drafted preamble with `src` imports, ID-column drop, and `df.describe(include="all")` (Log #9, #10) | I caught three agent errors: (1) `from src import …` would fail because notebook runs outside repo root — rewrote as standalone code (Log #11, Decision #12); (2) ID-column drop belongs in Task 3, not the EDA preamble — deferred it (Log #10, Decision #11); (3) `include="all"` adds redundant categorical summary rows since Geography and Gender are examined in dedicated plots — reverted to plain `df.describe()` (Log #13, Decision #11 updated) | Appendix: Agent Log #9, #10, #11, #13; Decision Register #11, #12 |
+| Notebook preamble | Agent drafted preamble with `src` imports, ID-column drop, and `df.describe(include="all")` (Log #9, #10) | I caught two agent errors: (1) `from src import …` would fail because notebook runs outside repo root — rewrote as standalone code (Log #11, Decision #12); (2) ID-column drop belongs in Task 3, not the EDA preamble — deferred it (Log #10, Decision #11). Initially reverted `include="all"` to plain `df.describe()` (Log #13), but later reinstated `include="all"` because categorical features have no dedicated count plot — `describe(include="all")` is the only place their composition is summarised (Log #17, Decision #17) | Appendix: Agent Log #9, #10, #11, #13, #17; Decision Register #11, #12, #17 |
 | Plot code (all 5 plots) | Agent provided code snippets for all plots (Log #9, #15). Also identified `labels=` → `tick_labels=` matplotlib deprecation fix for boxplot code (Log #16) | I rewrote Plot 1 entirely as standalone code with inline constants, percentage labels, and human-readable tick labels (Log #11, Decision #12). Ran each cell, verified outputs against dataframe checks listed in Section 2B, and applied the boxplot deprecation fix | Appendix: Agent Log #9, #11, #15, #16; Decision Register #12, #16; Screenshots: `[screenshot_plot1]` … `[screenshot_plot5]`; commit `[hash_plots]` |
 | Section 2 draft (this document) | Agent drafted 2A–2E with placeholders (Log #12, Decision #13). Agent included `NumOfProducts` in Plot 3 section but the actual histogram does not show it (Log #14, Decision #14). Full draft rewritten during consolidation from 10 to 6 plots (Log #15, Decision #15), then updated again when Plot 5 was dropped (Log #16, Decision #16) | I caught the `NumOfProducts` error in Plot 3 — the draft claimed a finding the plot cannot support, so I removed it (Decision #14). Filled all `[placeholders]` after running the full notebook; cross-checked every percentage and count against `value_counts()`, `groupby().mean()`, and `.corr()` outputs | Appendix: Agent Log #12, #14, #15, #16; Decision Register #13, #14, #15, #16; commit `[hash_section2_final]` |
 | Data-quality checks (2C) | Agent listed 12 checks framed as hypotheses with status column for auditable tracking (Log #12, Decision #13) | I confirmed or ruled out each check by running the validation commands in the notebook on the full dataset. Each status cell updated with result and evidence | Section 2C status column filled in; notebook cell outputs |
-| Boxplot findings integration (2B.6, 2C, 2D) | Agent integrated two sets of boxplot analysis notes into a unified interpretation for Plot 6: per-feature paragraphs (Age, Balance, CreditScore, EstimatedSalary), an outlier severity table, confirmed data-quality checks #9 and #12 in Section 2C, and added three new action items (#11–#13) to Section 2D covering Balance heavy-tail treatment, CreditScore outlier monitoring, and L1/L2 regularisation for overlapping features | I provided the raw boxplot observations (distributional shifts, outlier patterns, zero-balance cluster, modelling pitfalls); I reviewed the agent's merged write-up against my notes and the actual Plot 6 output to verify accuracy of claims and severity ratings | Agent Log #16; commit `658a95c` |
+| Boxplot findings integration (2B.5, 2C, 2D) | Agent integrated two sets of boxplot analysis notes into a unified interpretation for Plot 5: per-feature paragraphs (Age, Balance, CreditScore, EstimatedSalary), an outlier severity table, confirmed data-quality checks #9 and #12 in Section 2C, and added three new action items (#11–#13) to Section 2D covering Balance heavy-tail treatment, CreditScore outlier monitoring, and L1/L2 regularisation for overlapping features | I provided the raw boxplot observations (distributional shifts, outlier patterns, zero-balance cluster, modelling pitfalls); I reviewed the agent's merged write-up against my notes and the actual Plot 5 output to verify accuracy of claims and severity ratings | Agent Log #16; commit `658a95c` |
 | *[add rows as project progresses]* | | | |
