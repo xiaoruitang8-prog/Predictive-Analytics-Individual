@@ -2,8 +2,8 @@
 
 ## 1A  Dataset and Problem Framing
 
-This project uses the **Bank Customer Churn Prediction** dataset
-([Kaggle source](https://www.kaggle.com/datasets/shantanudhakadd/bank-customer-churn-prediction/data)),
+This project uses the **Customer Churn Dataset**
+([Kaggle source, CC0 licence](https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data)),
 distributed as an Excel file (`Churn_Modelling.xlsx`).
 The dataset contains **[N rows]** records of retail-banking customers across
 three European markets (France, Germany, Spain).

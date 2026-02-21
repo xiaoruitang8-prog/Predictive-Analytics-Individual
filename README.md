@@ -7,22 +7,28 @@ Binary classification of customer churn (`Exited` column) using the **Churn Mode
 
 ## Data access
 
-The dataset is **not included** in this repository (excluded via `.gitignore`).
+The dataset is **not included** in this repository (both `data/*.xlsx` and
+`data/*.csv` are excluded via `.gitignore`).
+The Kaggle page lists the licence as **CC0 — Public Domain**.
 
 To set up the data:
 
-1. Download the Excel file from Kaggle:
-   <https://www.kaggle.com/datasets/shantanudhakadd/bank-customer-churn-prediction/data>
-2. Rename the file (if needed) to **exactly** `Churn_Modelling.xlsx`.
-3. Place it at: `data/Churn_Modelling.xlsx`
+1. Download from Kaggle:
+   <https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data>
+2. Place the file at: `data/Churn_Modelling.xlsx`
+   - If the download provides a **CSV** instead of XLSX, you may place it as
+     `data/Churn_Modelling.csv` — the loader accepts both formats (XLSX is
+     tried first, then CSV as fallback).
+3. Expected local path: `data/Churn_Modelling.xlsx` (or `.csv`)
 
 Sanity check — run this from the repo root:
 
 ```bash
-python -c "import pandas as pd; df = pd.read_excel('data/Churn_Modelling.xlsx'); print(f'Loaded {len(df)} rows, {len(df.columns)} columns')"
+python -c "from src.data_loader import load_churn_data; df = load_churn_data(); print(f'Loaded {len(df)} rows, {len(df.columns)} columns')"
 ```
 
-If the file is missing, every script will raise a clear error with download instructions.
+If the file is missing, every script will raise a clear error with download
+instructions for both accepted formats.
 
 ## Repository structure
 

@@ -13,6 +13,7 @@ Thumbs.db
 
 # Data files (not distributed; see README for access instructions)
 data/*.xlsx
+data/*.csv
 
 # Outputs (large model files)
 outputs/*.joblib
