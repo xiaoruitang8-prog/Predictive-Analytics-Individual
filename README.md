@@ -7,19 +7,15 @@ Binary classification of customer churn (`Exited` column) using the **Churn Mode
 
 ## Data access
 
-The dataset is **not included** in this repository (both `data/*.xlsx` and
-`data/*.csv` are excluded via `.gitignore`).
+The dataset is **not included** in this repository (`data/*.csv` and
+`data/*.xlsx` are excluded via `.gitignore`).
 The Kaggle page lists the licence as **CC0 — Public Domain**.
 
 To set up the data:
 
-1. Download from Kaggle:
+1. Download the CSV from Kaggle:
    <https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data>
-2. Place the file at: `data/Churn_Modelling.xlsx`
-   - If the download provides a **CSV** instead of XLSX, you may place it as
-     `data/Churn_Modelling.csv` — the loader accepts both formats (XLSX is
-     tried first, then CSV as fallback).
-3. Expected local path: `data/Churn_Modelling.xlsx` (or `.csv`)
+2. Place the file at **exactly**: `data/customer_churn.csv`
 
 Sanity check — run this from the repo root:
 
@@ -27,13 +23,13 @@ Sanity check — run this from the repo root:
 python -c "from src.data_loader import load_churn_data; df = load_churn_data(); print(f'Loaded {len(df)} rows, {len(df.columns)} columns')"
 ```
 
-If the file is missing, every script will raise a clear error with download
-instructions for both accepted formats.
+If the file is missing, every script will raise a clear error with the Kaggle
+link and the required path.
 
 ## Repository structure
 
 ```
-data/               <- Place Churn_Modelling.xlsx here (git-ignored)
+data/               <- Place customer_churn.csv here (git-ignored)
 src/
   data_loader.py    <- Shared data-loading utility (file check + error msg)
   01_eda.py         <- Exploratory data analysis
@@ -48,7 +44,7 @@ requirements.txt    <- Pinned Python dependencies
 
 ```bash
 pip install -r requirements.txt
-# Place Churn_Modelling.xlsx in data/ first
+# Place customer_churn.csv in data/ first
 python src/run_all.py
 ```
 
