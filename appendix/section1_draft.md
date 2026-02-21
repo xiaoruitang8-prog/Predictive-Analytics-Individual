@@ -4,7 +4,7 @@
 
 This project uses the **Customer Churn Dataset**
 ([Kaggle source, CC0 licence](https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data)),
-distributed as an Excel file (`Churn_Modelling.xlsx`).
+distributed as a CSV file (`customer_churn.csv`).
 The dataset contains **[N rows]** records of retail-banking customers across
 three European markets (France, Germany, Spain).
 Each row represents **one customer at a single point in time** and includes
@@ -15,13 +15,20 @@ Three identifier columns (`RowNumber`, `CustomerId`, `Surname`) are dropped
 before modelling as they carry no predictive signal.
 
 **Data access.**
-The `.xlsx` file is **not committed** to this repository (`data/*.xlsx` is
-listed in `.gitignore`).
-To reproduce the analysis, download the file from the Kaggle link above,
-rename it to exactly `Churn_Modelling.xlsx`, and place it at
-`data/Churn_Modelling.xlsx`.
-The shared utility `src/data_loader.py` will raise a clear error with
-download instructions if the file is missing.
+A **200-row stratified sample** is included in the repository at
+`data/sample_customer_churn.csv` so that all scripts can run out of the box
+for a quick preview.
+The **full dataset** (10 000 rows) is not committed; to reproduce the final
+results, download the CSV from the
+[Kaggle page](https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data)
+and place it at exactly `data/customer_churn.csv`.
+Only the full file is excluded via `.gitignore`; the sample is committed.
+
+The shared utility `src/data_loader.py` reads the full dataset first
+(`data/customer_churn.csv`). If that file is missing it falls back to the
+sample (`data/sample_customer_churn.csv`) and emits a warning that results
+are **preview only**. If neither file is found, a clear error is raised with
+the Kaggle link and both required paths.
 
 ## 1B  Target and Prediction Type
 
@@ -74,6 +81,6 @@ AI coding agent and what I personally verified or corrected.
 | Step | What the Agent Did | What I Verified / Corrected | Evidence |
 |------|--------------------|-----------------------------|----------|
 | Project scaffolding | Created repo structure, README, `.gitignore`, `requirements.txt` | Reviewed all files; corrected filename inconsistency (`Churn Modelling` → `Churn_Modelling`); required dummy baseline + MLP in model set; required `.xlsx` gitignore | Appendix: Agent Log #1, Decision Register #1–5; commit `[hash_step0_corrections]` |
-| Data access setup | Created `src/data_loader.py` with file-existence guard and Kaggle link; updated README | Ran sanity-check command; tested missing-file error path; confirmed xlsx not tracked in git | Appendix: Agent Log #3; screenshot `[screenshot_data_check]` |
+| Data access setup | Created `src/data_loader.py` with full → sample fallback and Kaggle link; committed 200-row sample CSV; updated README | Ran sanity-check command; tested full-load, sample-fallback, and missing-file error paths; confirmed full CSV not tracked in git, sample committed | Appendix: Agent Log #3, #7, #8; Decision Register #8, #9; screenshot `[screenshot_data_check]` |
 | Section 1 draft | Drafted this markdown (1A–1E) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation | Appendix: Agent Log #4; commit `[hash_section1_final]` |
 | *[add rows as project progresses]* | | | |
