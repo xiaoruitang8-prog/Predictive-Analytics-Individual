@@ -7,29 +7,33 @@ Binary classification of customer churn (`Exited` column) using the **Churn Mode
 
 ## Data access
 
-The dataset is **not included** in this repository (`data/*.csv` and
-`data/*.xlsx` are excluded via `.gitignore`).
-The Kaggle page lists the licence as **CC0 — Public Domain**.
+A **200-row stratified sample** is included in the repository at
+`data/sample_customer_churn.csv` so that scripts can run out of the box for
+a quick preview.
 
-To set up the data:
+For the **full dataset** (10 000 rows):
 
-1. Download the CSV from Kaggle:
+1. Download the CSV from Kaggle (licence: CC0 — Public Domain):
    <https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data>
 2. Place the file at **exactly**: `data/customer_churn.csv`
 
-Sanity check — run this from the repo root:
+The full file is excluded via `.gitignore`; the sample is committed.
+
+The data loader (`src/data_loader.py`) reads the full dataset first. If it is
+missing, it falls back to the sample with a warning that results are
+preview-only. If neither file exists, a clear error is raised with the Kaggle
+link and required paths.
+
+Sanity check — run from the repo root:
 
 ```bash
 python -c "from src.data_loader import load_churn_data; df = load_churn_data(); print(f'Loaded {len(df)} rows, {len(df.columns)} columns')"
 ```
 
-If the file is missing, every script will raise a clear error with the Kaggle
-link and the required path.
-
 ## Repository structure
 
 ```
-data/               <- Place customer_churn.csv here (git-ignored)
+data/               <- sample_customer_churn.csv (committed) + customer_churn.csv (git-ignored)
 src/
   data_loader.py    <- Shared data-loading utility (file check + error msg)
   01_eda.py         <- Exploratory data analysis
@@ -44,7 +48,7 @@ requirements.txt    <- Pinned Python dependencies
 
 ```bash
 pip install -r requirements.txt
-# Place customer_churn.csv in data/ first
+# Works immediately with the sample; place customer_churn.csv in data/ for full results
 python src/run_all.py
 ```
 

@@ -11,9 +11,9 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data files (not distributed; see README for access instructions)
+# Data files (full dataset not distributed; see README for access instructions)
 data/*.xlsx
-data/*.csv
+data/customer_churn.csv
 
 # Outputs (large model files)
 outputs/*.joblib
