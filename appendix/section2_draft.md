@@ -186,13 +186,45 @@ df.groupby("Exited")[["CreditScore", "Age", "Tenure", "Balance",
                        "EstimatedSalary"]].median()
 ```
 
-*Interpretation (fill after running).*
-> Features with visible distributional shift between classes:
-> - `Age`: churners have a **[direction]** median
->   (**[churn_median]** vs **[retained_median]**).
-> - `Balance`: **[balance_observation]**.
-> - Features with little visible difference:
->   **[flat_features]** — these may contribute less to the model.
+*Interpretation.*
+
+> **Age — clearest separation.**  The churned group has a noticeably higher
+> median age and a higher interquartile range than the retained group,
+> confirming that churn risk increases with age.  Many data points sit above
+> the upper whisker in both groups (especially retained), indicating a long
+> upper tail with genuine outliers (ages above ~70).  The distributional
+> shift suggests churn may change across life stages — tree-based models or
+> splines will capture this non-linearity better than a purely linear term.
+>
+> **Balance — wide spread, zero-inflated.**  Both groups show a very wide
+> IQR, with the churned group sitting slightly higher overall.  Extreme high
+> values appear above the whiskers, confirming that Balance is heavy-tailed.
+> Critically, a large cluster of zero-balance customers is visible as
+> outlier dots near 0, creating a bimodal distribution (the zero-spike is
+> also visible in Plot 1).  This zero-inflated pattern needs special
+> treatment — a binary `HasBalance` indicator should be added to prevent
+> the zero mass from distorting tree splits and distance-based models.
+>
+> **CreditScore — weak discriminator.**  Distributions overlap
+> substantially between churned and retained customers, indicating limited
+> discriminatory power on its own.  A small number of unusually low scores
+> (~400 and below) appear as outlier dots, but the medians and IQRs are
+> nearly identical across both classes.
+>
+> **EstimatedSalary — near-identical distributions.**  The boxplots are
+> virtually indistinguishable between churned and retained customers,
+> confirming that EstimatedSalary is unlikely to be a strong predictor of
+> churn.  The spread is wide but roughly uniform with minimal outlier
+> behaviour compared to Balance.
+>
+> **Summary of outliers identified in this plot:**
+>
+> | Feature | Outlier Pattern | Severity |
+> |---------|----------------|----------|
+> | Age | Many unusually high ages above the upper whisker (~70+) | Moderate — may inflate variance in linear models |
+> | Balance | Very large balances above the upper whisker; zero-balance cluster acts as structural outlier | High — heavy tail + zero-inflation affect multiple model families |
+> | CreditScore | Small number of very low scores (~400) below the lower whisker | Low — few points, weak class separation |
+> | EstimatedSalary | Wide spread but less extreme outlier behaviour than Balance | Low — near-uniform, minimal impact expected |
 
 ---
 
@@ -212,10 +244,10 @@ dataset.
 | 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
 | 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | correlation print output below Plot 3 | [confirmed / not confirmed] |
 | 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — see Plot 5 | [confirmed / not confirmed] |
-| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 6 | [confirmed / not confirmed] |
+| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 6 | **Confirmed** — many values above ~70 visible beyond the upper whisker in both classes; robust scaling or winsorisation recommended for linear models |
 | 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Plot 1 | [confirmed / not confirmed] |
 | 11 | **Tenure range**: is 0 a valid value or does it indicate missing data? | `df["Tenure"].value_counts().sort_index()` | [confirmed / not confirmed] |
-| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Plot 1 | [confirmed / not confirmed] |
+| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Plot 1; boxplots nearly identical across classes in Plot 6 | **Confirmed** — roughly uniform with near-identical churned/retained distributions; low predictive power expected |
 
 ---
 
@@ -232,10 +264,13 @@ details belong in Task 3 (data preparation) and Task 4 (modelling).
 | 4 | `NumOfProducts` rare categories (3, 4) with very few rows | Monitor for instability in cross-validation; consider grouping 3+ into one bin | Task 3 |
 | 5 | Geography has different churn rates | Ensure one-hot or ordinal encoding preserves this signal | Task 3 |
 | 6 | `Gender` churn-rate gap | Include `Gender` as a feature; monitor fairness metrics post-modelling | Task 4 |
-| 7 | `Age` distributional shift between classes | Likely an important predictor — ensure it is scaled for models that need it (LogReg, MLP) | Task 3 |
+| 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for LogReg/MLP; use tree-based models or splines to capture non-linear life-stage effects | Task 3 / 4 |
 | 8 | No missing values (if confirmed) | No imputation step required in pipeline | Task 3 |
-| 9 | `EstimatedSalary` possibly uniform | Low predictive power expected — keep in model but note if feature importance is near zero | Task 4 |
+| 9 | `EstimatedSalary` roughly uniform, near-identical across classes | Low predictive power expected — keep in model but note if feature importance is near zero; may add noise, so regularisation or feature selection should be applied | Task 4 |
 | 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons | — |
+| 11 | `Balance` heavy-tailed with extreme high values | Apply `log1p` transform or robust scaling to prevent logistic regression and distance-based models from being pulled by extreme balance values | Task 3 |
+| 12 | `CreditScore` low-end outliers (~400) with weak class separation | Monitor feature importance; consider robust scaling but expect limited contribution on its own | Task 3 / 4 |
+| 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply regularisation (L1/L2) or feature selection to prevent low-signal features from degrading model performance | Task 4 |
 
 ---
 
