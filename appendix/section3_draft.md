@@ -1,47 +1,46 @@
-# 3  Prepare the Data for Modelling
-
-> **How to use this document.**  Each section below has three parts:
-> - **Report text** — the narrative for your coursework submission
-> - **Notebook cell** — the exact code to paste into your Jupyter notebook
-> - **Verify** — what to check after running the cell
->
-> Run the cells in order.  Fill in `[placeholders]` with actual values from
-> the notebook output.
+# Task 3 — Prepare the Data for Modelling
 
 ---
 
-## 3A  Split Discipline
+## Part 1: Plain-English Coding Plan
 
-### Report text
+1. **Imports.** Add one cell with the sklearn imports needed for splitting,
+   imputing, scaling, and encoding.
 
-A **stratified 70 / 15 / 15 train-validation-test split** is applied using
-`sklearn.model_selection.train_test_split` with `random_state=42`.
-Stratification on `Exited` ensures each split preserves the original class
-balance.
+2. **Create `df_model`.** Copy `df` (the raw dataframe from EDA, called
+   `df_raw` conceptually) into `df_model`, dropping the three identifier
+   columns (`RowNumber`, `CustomerId`, `Surname`).  `df` itself is never
+   overwritten, so all EDA cells above remain re-runnable.
 
-| Split | Purpose | Fraction | Rows (full dataset) |
-|-------|---------|----------|---------------------|
-| Train | Fit preprocessing and model parameters | 70% | **[train_n]** |
-| Validation | Tune hyperparameters, compare models | 15% | **[val_n]** |
-| Test | Final held-out evaluation (reported once) | 15% | **[test_n]** |
+3. **Validate before splitting.**  Run a single validation cell on
+   `df_model`: missing-value count, duplicate count, target-value check,
+   range checks on Age / CreditScore / Balance, overall churn rate, and
+   two pitfall-focused prints — fraction of rows where Balance = 0, and
+   value counts of NumOfProducts — to document known distributional quirks
+   before they enter the pipeline.
 
-**Two-step procedure.**  First split: train (70%) vs temp (30%).  Second
-split: temp into val (50% of 30% = 15%) and test (50% of 30% = 15%).  Both
-calls use `random_state=42`.
+4. **Stratified split.**  70 / 15 / 15 train-validation-test using two
+   calls to `train_test_split` with `random_state=42`.  Print split sizes
+   and churn rate per split to confirm stratification preserved class
+   balance.
 
-**Leakage prevention.**  The `ColumnTransformer` is **fit only on the
-training split**.  Validation and test data are transformed using the
-statistics (means, standard deviations, category vocabularies) learned from
-training data only.  This mirrors production conditions where future data
-is unseen at training time.
+5. **Preprocessing pipeline.**  Build a `ColumnTransformer` with two
+   sub-pipelines (numeric: median imputer + StandardScaler; categorical:
+   most-frequent imputer + OneHotEncoder).  `fit_transform` on training
+   data only; `transform` on validation and test.  Print output feature
+   names and shapes.
 
-### Notebook cells
+6. **No outputs saved.**  No files are written.  Task 4 reproduces the
+   same split and pipeline by re-running these cells with the same seed.
 
-**Cell 1 — Task 3 imports** (add after last EDA cell)
+---
+
+## Part 2: Notebook Cells
+
+### Cell 1 — Task 3 imports
 
 ```python
-# Task 3: Data Preparation
-# These imports are used for splitting, preprocessing, and building the pipeline.
+# ── Task 3: Data Preparation ────────────────────────────────────
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -49,189 +48,105 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 ```
 
-**Cell 2 — Define columns and drop identifiers**
+### Cell 2 — Create df_model (drop identifiers)
 
 ```python
-# Target column for binary classification.
-TARGET = "Exited"
+# Keep df (the raw 14-column dataframe from EDA) untouched so that
+# all EDA cells above remain re-runnable without side-effects.
+# df_model is the modelling-ready dataframe with identifiers removed.
 
-# Identifier columns carry no predictive signal and must not enter the model.
 ID_COLS = ["RowNumber", "CustomerId", "Surname"]
+TARGET  = "Exited"
 
-# Drop identifiers from the working dataframe.
-# This is deferred from EDA (Task 2) so that the raw dataframe was available
-# for exploration with all 14 columns intact.
-df = df.drop(columns=[c for c in ID_COLS if c in df.columns])
+df_model = df.drop(columns=[c for c in ID_COLS if c in df.columns])
 
-# Feature lists after dropping IDs.
 NUMERIC = [
     "CreditScore", "Age", "Tenure", "Balance",
     "NumOfProducts", "HasCrCard", "IsActiveMember", "EstimatedSalary",
 ]
 CATEGORICAL = ["Geography", "Gender"]
 
-print(f"Columns after dropping IDs: {list(df.columns)}")
-print(f"Shape: {df.shape}")
+print(f"df_model shape: {df_model.shape}")
+print(f"Columns: {list(df_model.columns)}")
 ```
 
-**Cell 3 — Stratified 70/15/15 split**
+### Cell 3 — Data validation checks
 
 ```python
-# --- Stratified Train / Validation / Test Split ---
-# Two-step procedure:
-#   Step 1: 70% train vs 30% temp
-#   Step 2: split temp 50/50 into 15% val + 15% test
-# Stratify on Exited so each split preserves the class balance.
+# ── Pre-split validation ────────────────────────────────────────
+# One cell, all checks.  Confirms the dataset is clean and documents
+# two distributional quirks relevant to modelling pitfalls.
+
+# 1. Missing values
+missing_total = df_model.isnull().sum().sum()
+print(f"1. Total missing values: {missing_total}")
+
+# 2. Duplicate rows
+n_dupes = df_model.duplicated().sum()
+print(f"2. Duplicate rows:       {n_dupes}")
+
+# 3. Target is binary
+print(f"3. Target unique values: {sorted(df_model[TARGET].unique())}")
+
+# 4. Range checks
+print(f"4. Age range:            {df_model['Age'].min()} – {df_model['Age'].max()}")
+print(f"   CreditScore range:    {df_model['CreditScore'].min()} – {df_model['CreditScore'].max()}")
+print(f"   Balance range:        {df_model['Balance'].min():.2f} – {df_model['Balance'].max():.2f}")
+
+# 5. Overall class balance
+churn_rate = df_model[TARGET].mean()
+print(f"5. Overall churn rate:   {churn_rate:.4f}")
+
+# ── Modelling pitfalls ──────────────────────────────────────────
+# 6. Zero-balance fraction — Balance has a large spike at exactly 0,
+#    creating a bimodal distribution that may affect distance-based
+#    models and tree split points.
+zero_bal_frac = (df_model["Balance"] == 0).mean()
+print(f"\n6. Fraction Balance == 0:  {zero_bal_frac:.4f}")
+
+# 7. NumOfProducts distribution — categories 3 and 4 have very few
+#    rows, which can cause unstable estimates and noisy splits.
+print(f"7. NumOfProducts value counts:")
+print(df_model["NumOfProducts"].value_counts().sort_index().to_string())
+```
+
+### Cell 4 — Stratified 70 / 15 / 15 split
+
+```python
+# ── Stratified split ────────────────────────────────────────────
+# Two-step procedure with the same seed for reproducibility:
+#   Step 1: 70% train  vs  30% temp
+#   Step 2: 50/50 temp → 15% val + 15% test
 SEED = 42
 
-X = df.drop(columns=[TARGET])
-y = df[TARGET]
+X = df_model.drop(columns=[TARGET])
+y = df_model[TARGET]
 
-# Step 1: train (70%) vs temp (30%)
 X_train, X_temp, y_train, y_temp = train_test_split(
     X, y, test_size=0.30, stratify=y, random_state=SEED,
 )
-
-# Step 2: val (50% of 30% = 15%) vs test (50% of 30% = 15%)
 X_val, X_test, y_val, y_test = train_test_split(
     X_temp, y_temp, test_size=0.50, stratify=y_temp, random_state=SEED,
 )
 
-print(f"Train: {X_train.shape[0]}  Val: {X_val.shape[0]}  Test: {X_test.shape[0]}")
+# Confirm sizes and stratification
+for name, sy in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
+    n = len(sy)
+    n1 = int(sy.sum())
+    print(f"  {name:5s}: n={n:5d}, churn={n1:4d}, rate={n1/n:.4f}")
 ```
 
-### Verify (after running cells 1–3)
-
-- [ ] Columns after dropping IDs: 11 (8 numeric + 2 categorical + 1 target)
-- [ ] Split sizes: **[train_n]** / **[val_n]** / **[test_n]** (expect 7000 / 1500 / 1500)
-- [ ] No ID columns in `df.columns`
-
----
-
-## 3B  Data Validation Checks
-
-### Report text
-
-The following checks run in the notebook before modelling to confirm the
-dataset is clean.
-
-| # | Check | Expected Result | Actual Result |
-|---|-------|----------------|---------------|
-| 1 | Missing values per column and total | 0 missing (EDA confirmed) | **[fill]** |
-| 2 | Duplicate rows | 0 duplicates | **[fill]** |
-| 3 | Age range (min/max) | Roughly 18–92 | **[fill]** |
-| 4 | CreditScore range (min/max) | Roughly 350–850 | **[fill]** |
-| 5 | Balance range (min/max) | 0 to ~250k | **[fill]** |
-| 6 | Target is binary | Values exactly {0, 1} | **[fill]** |
-| 7 | ID columns not in features | RowNumber, CustomerId, Surname absent | **[fill]** |
-| 8 | Overall class balance | ~20% churn | **[fill]** |
-
-**Class balance per split (fill after running):**
-
-| Split | N | Class 0 | Class 1 | Churn Rate |
-|-------|---|---------|---------|------------|
-| Train | **[train_n]** | **[train_0]** | **[train_1]** | **[train_rate]** |
-| Val | **[val_n]** | **[val_0]** | **[val_1]** | **[val_rate]** |
-| Test | **[test_n]** | **[test_0]** | **[test_1]** | **[test_rate]** |
-
-### Notebook cells
-
-**Cell 4 — Data validation checks**
+### Cell 5 — Preprocessing pipeline
 
 ```python
-# --- Data Validation Checks ---
-# These checks confirm the dataset is clean before modelling.
-
-# 1. Missing values per column and total
-missing = df.isnull().sum()
-print("Missing values per column:")
-print(missing.to_string())
-print(f"Total missing: {missing.sum()}\n")
-
-# 2. Duplicate rows
-n_dupes = df.duplicated().sum()
-print(f"Duplicate rows: {n_dupes}\n")
-
-# 3. Range checks for key numeric features
-print("Range checks:")
-print(f"  Age:         {df['Age'].min()} – {df['Age'].max()}")
-print(f"  CreditScore: {df['CreditScore'].min()} – {df['CreditScore'].max()}")
-print(f"  Balance:     {df['Balance'].min():.2f} – {df['Balance'].max():.2f}\n")
-
-# 4. Target values — must be exactly {0, 1}
-print(f"Target unique values: {sorted(df[TARGET].unique())}")
-
-# 5. Overall class balance
-vc = df[TARGET].value_counts()
-print(f"Class balance: {vc.to_dict()}")
-print(f"Churn rate: {vc[1] / len(df):.4f}")
-```
-
-**Cell 5 — Class balance per split**
-
-```python
-# Confirm stratification preserved the churn rate across all splits.
-for name, split_y in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
-    n = len(split_y)
-    n1 = int(split_y.sum())
-    n0 = n - n1
-    print(f"  {name:5s}: n={n:5d}, class_0={n0:4d}, class_1={n1:4d}, "
-          f"churn_rate={n1/n:.4f}")
-```
-
-### Verify (after running cells 4–5)
-
-- [ ] Total missing = 0
-- [ ] Duplicate rows = 0
-- [ ] Age range: 18–92
-- [ ] CreditScore range: 350–850
-- [ ] Balance range: 0.00–250898.09
-- [ ] Target values: [0, 1]
-- [ ] Churn rate ~0.2037 in all three splits (within 1 pp of each other)
-
----
-
-## 3C  Preprocessing Pipeline
-
-### Report text
-
-The preprocessing uses a single `sklearn.compose.ColumnTransformer` with
-two sub-pipelines:
-
-| Sub-pipeline | Columns | Steps | Notes |
-|-------------|---------|-------|-------|
-| Numeric | `CreditScore`, `Age`, `Tenure`, `Balance`, `NumOfProducts`, `HasCrCard`, `IsActiveMember`, `EstimatedSalary` | `SimpleImputer(strategy="median")` then `StandardScaler()` | Median imputation is defensive (dataset has no missing values, but future data might). StandardScaler centres and scales to unit variance — needed for LogReg and MLP; tree-based models are scale-invariant. |
-| Categorical | `Geography`, `Gender` | `SimpleImputer(strategy="most_frequent")` then `OneHotEncoder(handle_unknown="ignore")` | `handle_unknown="ignore"` produces all-zero columns for unseen categories at transform time. No ordinal encoding used. |
-
-`remainder="drop"` ensures any unlisted column (including the target) is
-excluded from the feature matrix.
-
-**Identifier columns.**  `RowNumber`, `CustomerId`, `Surname` were dropped
-in Cell 2 before splitting.
-
-**Output features after transformation (fill after running):**
-> **[n_output_features]** total:
-> - **[n_numeric]** scaled numeric features
-> - **[n_ohe]** one-hot-encoded columns from Geography and Gender
->
-> Feature names: `[feature_names_list]`
-
-### Notebook cell
-
-**Cell 6 — Build and fit preprocessing pipeline**
-
-```python
-# --- Preprocessing Pipeline ---
-# Single ColumnTransformer with two sub-pipelines:
-#   Numeric:     median imputer (defensive — no nulls in this dataset) + StandardScaler
-#   Categorical: most-frequent imputer + OneHotEncoder
-#
-# fit_transform on training data ONLY to prevent data leakage.
-# Validation and test sets are transformed using training statistics.
+# ── Preprocessing pipeline ──────────────────────────────────────
+# Numeric:     median imputer (defensive) → StandardScaler
+# Categorical: most-frequent imputer → OneHotEncoder
+# fit_transform on TRAINING data only; transform val and test.
 
 numeric_pipe = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
-    ("scaler", StandardScaler()),
+    ("scaler",  StandardScaler()),
 ])
 
 categorical_pipe = Pipeline([
@@ -241,63 +156,126 @@ categorical_pipe = Pipeline([
 
 preprocessor = ColumnTransformer(
     transformers=[
-        ("num", numeric_pipe, NUMERIC),
-        ("cat", categorical_pipe, CATEGORICAL),
+        ("num", numeric_pipe,      NUMERIC),
+        ("cat", categorical_pipe,   CATEGORICAL),
     ],
-    remainder="drop",  # drops any unlisted column (safety net)
+    remainder="drop",
 )
 
-# Fit on train, transform all three splits.
 X_train_t = preprocessor.fit_transform(X_train)
 X_val_t   = preprocessor.transform(X_val)
 X_test_t  = preprocessor.transform(X_test)
 
-# Show output feature names and shapes.
 feature_names = preprocessor.get_feature_names_out().tolist()
 print(f"Output features ({len(feature_names)}):")
 for fn in feature_names:
     print(f"  {fn}")
-print(f"\nTrain: {X_train_t.shape}  Val: {X_val_t.shape}  Test: {X_test_t.shape}")
+print(f"\nShapes — Train: {X_train_t.shape}  Val: {X_val_t.shape}  Test: {X_test_t.shape}")
 ```
 
-### Verify (after running cell 6)
+---
 
-- [ ] Output features: 13 total (8 numeric + 3 Geography + 2 Gender)
-- [ ] Train shape: (7000, 13)
-- [ ] Val shape: (1500, 13)
-- [ ] Test shape: (1500, 13)
-- [ ] `fit_transform` called on `X_train` only; `transform` on val and test
+## Part 3: Section 3 Report Text
+
+*(Copy below into the coursework report.  Fill `[placeholders]` with
+actual values after running the notebook.)*
 
 ---
 
-## 3D  Complete Verification Checklist
+### 3A  Split Discipline
 
-After running all six cells, confirm every item below:
+A **stratified 70 / 15 / 15 train-validation-test split** is applied using
+`sklearn.model_selection.train_test_split` with `random_state=42`.
+Stratification on `Exited` preserves the original class balance in every
+split.
 
-| # | Check | Expected | Pass? |
-|---|-------|----------|-------|
-| 1 | No missing values | total = 0 | |
-| 2 | No duplicates | count = 0 | |
-| 3 | Age range | 18–92 | |
-| 4 | CreditScore range | 350–850 | |
-| 5 | Balance range | 0.00–250898.09 | |
-| 6 | Target values | {0, 1} only | |
-| 7 | ID columns absent | RowNumber, CustomerId, Surname not in df | |
-| 8 | Split sizes | 7000 / 1500 / 1500 | |
-| 9 | Churn rate per split | all ~0.2037 | |
-| 10 | Output features | 13 (8 num + 5 OHE) | |
-| 11 | Preprocessor fit on train only | fit_transform(X_train), transform(X_val), transform(X_test) | |
-| 12 | No output files created | no JSON, no joblib | |
+| Split | Purpose | Rows |
+|-------|---------|------|
+| Train | Fit preprocessing and model parameters | **[train_n]** |
+| Validation | Tune hyperparameters, compare models | **[val_n]** |
+| Test | Final held-out evaluation (reported once) | **[test_n]** |
+
+The split uses a **two-step procedure**: first 70% train vs 30% temp, then
+temp is split 50/50 into validation and test.  Both calls use
+`random_state=42`.
+
+**Leakage prevention.**  The `ColumnTransformer` is **fit only on the
+training split**.  Validation and test data are transformed using the
+statistics (means, standard deviations, category vocabularies) learned from
+training data only.
 
 ---
 
-## 3E  Agent Plan vs. My Verification
+### 3B  Data Validation and Modelling Pitfalls
+
+Before splitting, the following checks confirm the dataset is modelling-ready.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | Missing values | **[fill]** (expect 0) |
+| 2 | Duplicate rows | **[fill]** (expect 0) |
+| 3 | Target values | **[fill]** (expect {0, 1}) |
+| 4 | Age range | **[fill]** (expect 18–92) |
+| 5 | CreditScore range | **[fill]** (expect 350–850) |
+| 6 | Balance range | **[fill]** (expect 0–~250 k) |
+| 7 | Overall churn rate | **[fill]** (expect ~0.2037) |
+
+**Modelling pitfalls identified:**
+
+- **Zero-balance spike.**  **[fill]%** of rows have `Balance == 0`,
+  creating a bimodal distribution (visible in the EDA histogram, Plot 1).
+  StandardScaler will centre this spike but cannot remove the bimodality.
+  Tree-based models handle this naturally; for linear models, a binary
+  `HasBalance` indicator could be added in future iterations, but it is
+  omitted here to keep the baseline pipeline minimal.
+
+- **NumOfProducts rare categories.**  Products 1 and 2 dominate, while
+  products **[fill]** and **[fill]** have very few rows (**[fill]** and
+  **[fill]** respectively).  These small groups can cause unstable
+  cross-validation folds and noisy tree splits.  The current pipeline
+  treats `NumOfProducts` as numeric (scaled), which sidesteps the
+  rare-category problem.  If treated categorically in future work,
+  grouping 3+ into a single bin would be advisable.
+
+**Class balance per split:**
+
+| Split | N | Churned | Churn Rate |
+|-------|---|---------|------------|
+| Train | **[fill]** | **[fill]** | **[fill]** |
+| Val   | **[fill]** | **[fill]** | **[fill]** |
+| Test  | **[fill]** | **[fill]** | **[fill]** |
+
+All three splits show a churn rate within 1 percentage point of the overall
+rate, confirming that stratification worked correctly.
+
+---
+
+### 3C  Preprocessing Pipeline
+
+A single `sklearn.compose.ColumnTransformer` applies two sub-pipelines:
+
+| Sub-pipeline | Columns | Steps | Rationale |
+|-------------|---------|-------|-----------|
+| Numeric | CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard, IsActiveMember, EstimatedSalary | MedianImputer → StandardScaler | Median imputation is defensive (no nulls exist, but future data might).  StandardScaler is needed for LogReg and MLP; tree models are scale-invariant. |
+| Categorical | Geography, Gender | MostFrequentImputer → OneHotEncoder | `handle_unknown="ignore"` produces all-zero rows for unseen categories.  No ordinal encoding used. |
+
+`remainder="drop"` excludes any unlisted column.  Identifier columns were
+already removed when creating `df_model`.
+
+**Output features:** **[fill]** total — **[fill]** scaled numeric +
+**[fill]** one-hot-encoded (Geography × 3, Gender × 2).
+
+---
+
+### 3D  Agent Plan vs. My Verification
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
 | Initial Task 3 (v1) | Agent created `src/preprocessing.py` with 60/20/20 split, HasBalance engineered feature, and saved three output files (split_indices.json, preprocessor.joblib, validation_report.json) (Log #19, Decision #19) | I reviewed and decided the setup was over-engineered: HasBalance is unnecessary for a minimal rubric-aligned submission, 70/15/15 gives more training data, and output files add clutter when Task 4 can call the same functions |
-| Revised Task 3 (v2) | Agent rewrote `src/` to 70/15/15 split, removed HasBalance, removed all output file saving, added Balance range check, simplified validation to print-only (Log #20, Decision #20) | [fill after running notebook cells] |
-| Notebook cells | Agent provided 6 self-contained notebook cells matching the `src/` logic but written inline (no `src` imports), consistent with the notebook style established in Task 2 (Decision #12) | [fill: confirm cells run, outputs match expected values, paste into notebook] |
+| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed all output file saving, added Balance range check, simplified validation to print-only (Log #20, Decision #20) | [fill after running notebook cells] |
+| df naming | Agent initially used `df = df.drop(...)`, silently overwriting the EDA dataframe | I requested `df_model` to preserve `df` (the raw EDA dataframe) so all Task 2 cells remain re-runnable without side-effects |
+| Validation structure | Agent had validation checks in four places (Cell 4, Cell 5, report table 3B, checklist 3D).  Redundant checklist section 3D repeated 3B almost verbatim | I merged all validation into one cell and one report table, removed the duplicate checklist section |
+| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts value counts as two extra prints in the validation cell, referenced in report text as modelling pitfalls | [fill: confirm output values match report text] |
 | log1p for Balance | Agent recommended skipping log1p: HistGradientBoosting is monotonic-invariant, LogReg/MLP get StandardScaler, and adding FunctionTransformer for one column adds pipeline complexity for uncertain gain | [fill: agree/disagree with rationale] |
-| Section 3 draft | Agent drafted 3A–3E as integrated plan (report text + notebook code + verification per section) | [fill all `[placeholders]` after running notebook on full dataset] |
+| Notebook cells (final) | Agent provided 5 self-contained cells (imports, df_model, validation, split, pipeline) with no src imports, consistent with notebook style from Task 2 | [fill: confirm cells run, outputs match expected values] |
 | *[add rows as project progresses]* | | |
