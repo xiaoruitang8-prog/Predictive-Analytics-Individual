@@ -1,0 +1,74 @@
+{
+  "stage": "raw",
+  "n_rows": 10000,
+  "checks": {
+    "expected_columns_missing": [],
+    "target_values": [
+      0,
+      1
+    ],
+    "id_columns_present": [],
+    "missing_values": {},
+    "total_missing": 0,
+    "duplicate_rows": 0,
+    "age_range": [
+      18,
+      92
+    ],
+    "credit_score_range": [
+      350,
+      850
+    ]
+  },
+  "split_balance": {
+    "train": {
+      "n": 6000,
+      "class_0": 4778,
+      "class_1": 1222,
+      "churn_rate": 0.2037
+    },
+    "val": {
+      "n": 2000,
+      "class_0": 1592,
+      "class_1": 408,
+      "churn_rate": 0.204
+    },
+    "test": {
+      "n": 2000,
+      "class_0": 1593,
+      "class_1": 407,
+      "churn_rate": 0.2035
+    }
+  },
+  "preprocessor": {
+    "n_output_features": 14,
+    "feature_names": [
+      "num__CreditScore",
+      "num__Age",
+      "num__Tenure",
+      "num__Balance",
+      "num__NumOfProducts",
+      "num__HasCrCard",
+      "num__IsActiveMember",
+      "num__EstimatedSalary",
+      "num__HasBalance",
+      "cat__Geography_France",
+      "cat__Geography_Germany",
+      "cat__Geography_Spain",
+      "cat__Gender_Female",
+      "cat__Gender_Male"
+    ],
+    "train_shape": [
+      6000,
+      14
+    ],
+    "val_shape": [
+      2000,
+      14
+    ],
+    "test_shape": [
+      2000,
+      14
+    ]
+  }
+}

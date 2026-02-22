@@ -36,8 +36,8 @@ python -c "from src.data_loader import load_churn_data; df = load_churn_data(); 
 data/               <- sample_customer_churn.csv (committed) + customer_churn.csv (git-ignored)
 src/
   data_loader.py    <- Shared data-loading utility (file check + error msg)
-  01_eda.py         <- Exploratory data analysis
-  02_modelling.py   <- Pipeline, model selection, final evaluation
+  preprocessing.py  <- Feature constants, ColumnTransformer, split, validation
+  03_preprocess.py  <- Task 3 entry point: validate, split, preprocess, save
   run_all.py        <- Single entry point to reproduce everything
 outputs/            <- Plots, metrics, saved models (git-ignored heavy files)
 appendix/           <- Agent log and decision register for the report
@@ -49,6 +49,11 @@ requirements.txt    <- Pinned Python dependencies
 ```bash
 pip install -r requirements.txt
 # Works immediately with the sample; place customer_churn.csv in data/ for full results
+
+# Task 3 — Data validation, splitting, and preprocessing
+python src/03_preprocess.py
+
+# Full pipeline (once all tasks are implemented)
 python src/run_all.py
 ```
 
