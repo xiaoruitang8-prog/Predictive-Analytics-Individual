@@ -2,42 +2,30 @@
 
 ---
 
-## Part 1: Plain-English Coding Plan
+## Coding Plan
 
-1. **Imports.** Add one cell with the sklearn imports needed for splitting,
-   imputing, scaling, and encoding.
+1. **Imports.** One cell with the sklearn imports for splitting, imputing,
+   scaling, and encoding.
 
-2. **Create `df_model`.** Copy `df` (the raw dataframe from EDA, called
-   `df_raw` conceptually) into `df_model`, dropping the three identifier
-   columns (`RowNumber`, `CustomerId`, `Surname`).  `df` itself is never
-   overwritten, so all EDA cells above remain re-runnable.
+2. **Create `df_model`.** Copy `df` into `df_model`, dropping the three
+   identifier columns.  `df` is never overwritten so EDA cells stay
+   re-runnable.
 
-3. **Validate before splitting.**  Run a single validation cell on
-   `df_model`: missing-value count, duplicate count, target-value check,
-   range checks on Age / CreditScore / Balance, overall churn rate, and
-   two pitfall-focused prints — fraction of rows where Balance = 0, and
-   value counts of NumOfProducts — to document known distributional quirks
-   before they enter the pipeline.
+3. **Validate before splitting.**  Single validation cell on `df_model`:
+   missing values, duplicates, target check, range checks, churn rate,
+   plus two pitfall prints (Balance == 0 fraction, NumOfProducts counts).
 
-4. **Stratified split.**  70 / 15 / 15 train-validation-test using two
-   calls to `train_test_split` with `random_state=42`.  Print split sizes
-   and churn rate per split to confirm stratification preserved class
-   balance.
+4. **Stratified split.**  70 / 15 / 15 via two `train_test_split` calls
+   with `random_state=42`.  Print split sizes and churn rate per split.
 
-5. **Preprocessing pipeline.**  Build a `ColumnTransformer` with two
-   sub-pipelines (numeric: median imputer + StandardScaler; categorical:
-   most-frequent imputer + OneHotEncoder).  `fit_transform` on training
-   data only; `transform` on validation and test.  Print output feature
-   names and shapes.
+5. **Preprocessing pipeline.**  `ColumnTransformer` with numeric and
+   categorical sub-pipelines.  `fit_transform` on training only.
 
-6. **No outputs saved.**  No files are written.  Task 4 reproduces the
-   same split and pipeline by re-running these cells with the same seed.
+6. **No outputs saved.**  Task 4 re-runs these cells with the same seed.
 
 ---
 
-## Part 2: Notebook Cells
-
-### Cell 1 — Task 3 imports
+## Cell 1 — Task 3 imports
 
 ```python
 # ── Task 3: Data Preparation ────────────────────────────────────
@@ -48,7 +36,11 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 ```
 
-### Cell 2 — Create df_model (drop identifiers)
+*(No report text — imports only.)*
+
+---
+
+## Cell 2 — Create df_model (drop identifiers)
 
 ```python
 # Keep df (the raw 14-column dataframe from EDA) untouched so that
@@ -70,7 +62,11 @@ print(f"df_model shape: {df_model.shape}")
 print(f"Columns: {list(df_model.columns)}")
 ```
 
-### Cell 3 — Data validation checks
+*(No separate report text — column drop is mentioned in 3C below.)*
+
+---
+
+## Cell 3 — Data validation checks
 
 ```python
 # ── Pre-split validation ────────────────────────────────────────
@@ -110,7 +106,40 @@ print(f"7. NumOfProducts value counts:")
 print(df_model["NumOfProducts"].value_counts().sort_index().to_string())
 ```
 
-### Cell 4 — Stratified 70 / 15 / 15 split
+### Report text — 3B  Data Validation and Modelling Pitfalls
+
+Before splitting, the following checks confirm the dataset is modelling-ready.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | Missing values | **[fill]** (expect 0) |
+| 2 | Duplicate rows | **[fill]** (expect 0) |
+| 3 | Target values | **[fill]** (expect {0, 1}) |
+| 4 | Age range | **[fill]** (expect 18–92) |
+| 5 | CreditScore range | **[fill]** (expect 350–850) |
+| 6 | Balance range | **[fill]** (expect 0–~250 k) |
+| 7 | Overall churn rate | **[fill]** (expect ~0.2037) |
+
+**Modelling pitfalls identified:**
+
+- **Zero-balance spike.**  **[fill]%** of rows have `Balance == 0`,
+  creating a bimodal distribution (visible in the EDA histogram, Plot 1).
+  StandardScaler will centre this spike but cannot remove the bimodality.
+  Tree-based models handle this naturally; for linear models, a binary
+  `HasBalance` indicator could be added in future iterations, but it is
+  omitted here to keep the baseline pipeline minimal.
+
+- **NumOfProducts rare categories.**  Products 1 and 2 dominate, while
+  products **[fill]** and **[fill]** have very few rows (**[fill]** and
+  **[fill]** respectively).  These small groups can cause unstable
+  cross-validation folds and noisy tree splits.  The current pipeline
+  treats `NumOfProducts` as numeric (scaled), which sidesteps the
+  rare-category problem.  If treated categorically in future work,
+  grouping 3+ into a single bin would be advisable.
+
+---
+
+## Cell 4 — Stratified 70 / 15 / 15 split
 
 ```python
 # ── Stratified split ────────────────────────────────────────────
@@ -136,7 +165,42 @@ for name, sy in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
     print(f"  {name:5s}: n={n:5d}, churn={n1:4d}, rate={n1/n:.4f}")
 ```
 
-### Cell 5 — Preprocessing pipeline
+### Report text — 3A  Split Discipline
+
+A **stratified 70 / 15 / 15 train-validation-test split** is applied using
+`sklearn.model_selection.train_test_split` with `random_state=42`.
+Stratification on `Exited` preserves the original class balance in every
+split.
+
+| Split | Purpose | Rows |
+|-------|---------|------|
+| Train | Fit preprocessing and model parameters | **[train_n]** |
+| Validation | Tune hyperparameters, compare models | **[val_n]** |
+| Test | Final held-out evaluation (reported once) | **[test_n]** |
+
+The split uses a **two-step procedure**: first 70% train vs 30% temp, then
+temp is split 50/50 into validation and test.  Both calls use
+`random_state=42`.
+
+**Leakage prevention.**  The `ColumnTransformer` is **fit only on the
+training split**.  Validation and test data are transformed using the
+statistics (means, standard deviations, category vocabularies) learned from
+training data only.
+
+**Class balance per split:**
+
+| Split | N | Churned | Churn Rate |
+|-------|---|---------|------------|
+| Train | **[fill]** | **[fill]** | **[fill]** |
+| Val   | **[fill]** | **[fill]** | **[fill]** |
+| Test  | **[fill]** | **[fill]** | **[fill]** |
+
+All three splits show a churn rate within 1 percentage point of the overall
+rate, confirming that stratification worked correctly.
+
+---
+
+## Cell 5 — Preprocessing pipeline
 
 ```python
 # ── Preprocessing pipeline ──────────────────────────────────────
@@ -173,84 +237,7 @@ for fn in feature_names:
 print(f"\nShapes — Train: {X_train_t.shape}  Val: {X_val_t.shape}  Test: {X_test_t.shape}")
 ```
 
----
-
-## Part 3: Section 3 Report Text
-
-*(Copy below into the coursework report.  Fill `[placeholders]` with
-actual values after running the notebook.)*
-
----
-
-### 3A  Split Discipline
-
-A **stratified 70 / 15 / 15 train-validation-test split** is applied using
-`sklearn.model_selection.train_test_split` with `random_state=42`.
-Stratification on `Exited` preserves the original class balance in every
-split.
-
-| Split | Purpose | Rows |
-|-------|---------|------|
-| Train | Fit preprocessing and model parameters | **[train_n]** |
-| Validation | Tune hyperparameters, compare models | **[val_n]** |
-| Test | Final held-out evaluation (reported once) | **[test_n]** |
-
-The split uses a **two-step procedure**: first 70% train vs 30% temp, then
-temp is split 50/50 into validation and test.  Both calls use
-`random_state=42`.
-
-**Leakage prevention.**  The `ColumnTransformer` is **fit only on the
-training split**.  Validation and test data are transformed using the
-statistics (means, standard deviations, category vocabularies) learned from
-training data only.
-
----
-
-### 3B  Data Validation and Modelling Pitfalls
-
-Before splitting, the following checks confirm the dataset is modelling-ready.
-
-| # | Check | Result |
-|---|-------|--------|
-| 1 | Missing values | **[fill]** (expect 0) |
-| 2 | Duplicate rows | **[fill]** (expect 0) |
-| 3 | Target values | **[fill]** (expect {0, 1}) |
-| 4 | Age range | **[fill]** (expect 18–92) |
-| 5 | CreditScore range | **[fill]** (expect 350–850) |
-| 6 | Balance range | **[fill]** (expect 0–~250 k) |
-| 7 | Overall churn rate | **[fill]** (expect ~0.2037) |
-
-**Modelling pitfalls identified:**
-
-- **Zero-balance spike.**  **[fill]%** of rows have `Balance == 0`,
-  creating a bimodal distribution (visible in the EDA histogram, Plot 1).
-  StandardScaler will centre this spike but cannot remove the bimodality.
-  Tree-based models handle this naturally; for linear models, a binary
-  `HasBalance` indicator could be added in future iterations, but it is
-  omitted here to keep the baseline pipeline minimal.
-
-- **NumOfProducts rare categories.**  Products 1 and 2 dominate, while
-  products **[fill]** and **[fill]** have very few rows (**[fill]** and
-  **[fill]** respectively).  These small groups can cause unstable
-  cross-validation folds and noisy tree splits.  The current pipeline
-  treats `NumOfProducts` as numeric (scaled), which sidesteps the
-  rare-category problem.  If treated categorically in future work,
-  grouping 3+ into a single bin would be advisable.
-
-**Class balance per split:**
-
-| Split | N | Churned | Churn Rate |
-|-------|---|---------|------------|
-| Train | **[fill]** | **[fill]** | **[fill]** |
-| Val   | **[fill]** | **[fill]** | **[fill]** |
-| Test  | **[fill]** | **[fill]** | **[fill]** |
-
-All three splits show a churn rate within 1 percentage point of the overall
-rate, confirming that stratification worked correctly.
-
----
-
-### 3C  Preprocessing Pipeline
+### Report text — 3C  Preprocessing Pipeline
 
 A single `sklearn.compose.ColumnTransformer` applies two sub-pipelines:
 
@@ -267,7 +254,7 @@ already removed when creating `df_model`.
 
 ---
 
-### 3D  Agent Plan vs. My Verification
+## 3D  Agent Plan vs. My Verification
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
