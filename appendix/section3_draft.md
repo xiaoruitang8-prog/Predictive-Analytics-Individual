@@ -4,24 +4,30 @@
 
 ## Coding Plan
 
-1. **Imports.** One cell with the sklearn imports for splitting, imputing,
-   scaling, and encoding.
+1. **Imports.** sklearn splitting, imputing, scaling, encoding; numpy for
+   post-preprocessing NaN checks.
 
-2. **Create `df_model`.** Copy `df` into `df_model`, dropping the three
-   identifier columns.  `df` is never overwritten so EDA cells stay
-   re-runnable.
+2. **Create `df_raw` and `df_model`.** Copy `df` to `df_raw`; drop
+   RowNumber, CustomerId, Surname to create `df_model`.  Neither overwrites
+   `df`, so EDA cells stay re-runnable.
 
-3. **Validate before splitting.**  Single validation cell on `df_model`:
-   missing values, duplicates, target check, range checks, churn rate,
-   plus two pitfall prints (Balance == 0 fraction, NumOfProducts counts).
+3. **Pre-split validation (A).** Seven integrity checks on `df_model`:
+   missing values, duplicates, target binary, Age/CreditScore/Balance
+   ranges, overall churn rate.  Plus two pitfall prints (Balance == 0
+   fraction, NumOfProducts value counts).
 
-4. **Stratified split.**  70 / 15 / 15 via two `train_test_split` calls
-   with `random_state=42`.  Print split sizes and churn rate per split.
+4. **Stratified split.** 70 / 15 / 15 via two `train_test_split` calls
+   with `random_state=42`.  Print sizes and churn rate per split.
 
-5. **Preprocessing pipeline.**  `ColumnTransformer` with numeric and
-   categorical sub-pipelines.  `fit_transform` on training only.
+5. **Preprocessing pipeline.** Single `ColumnTransformer`: numeric
+   (MedianImputer → StandardScaler), categorical (MostFrequentImputer →
+   OneHotEncoder).  `fit_transform` on X_train only.
 
-6. **No outputs saved.**  Task 4 re-runs these cells with the same seed.
+6. **Post-preprocessing validation (B).** Four checks: row counts match
+   y splits, no NaNs, feature count correct, `handle_unknown="ignore"`
+   works for unseen categories.
+
+7. **No files saved.** Task 4 re-runs these deterministic cells.
 
 ---
 
@@ -34,75 +40,69 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
+import numpy as np
 ```
 
 *(No report text — imports only.)*
 
 ---
 
-## Cell 2 — Create df_model (drop identifiers)
+## Cell 2 — Create df_raw and df_model
 
 ```python
-# Keep df (the raw 14-column dataframe from EDA) untouched so that
-# all EDA cells above remain re-runnable without side-effects.
-# df_model is the modelling-ready dataframe with identifiers removed.
+# df is the 14-column dataframe loaded in the EDA preamble.
+# df_raw preserves a read-only copy; df_model drops identifiers.
+# Neither overwrites df, so all EDA cells remain re-runnable.
 
-ID_COLS = ["RowNumber", "CustomerId", "Surname"]
-TARGET  = "Exited"
-
-df_model = df.drop(columns=[c for c in ID_COLS if c in df.columns])
-
-NUMERIC = [
+ID_COLS     = ["RowNumber", "CustomerId", "Surname"]
+TARGET      = "Exited"
+NUMERIC     = [
     "CreditScore", "Age", "Tenure", "Balance",
     "NumOfProducts", "HasCrCard", "IsActiveMember", "EstimatedSalary",
 ]
 CATEGORICAL = ["Geography", "Gender"]
 
-print(f"df_model shape: {df_model.shape}")
-print(f"Columns: {list(df_model.columns)}")
+df_raw   = df.copy()
+df_model = df_raw.drop(columns=ID_COLS)
+
+print(f"df_raw:   {df_raw.shape}")
+print(f"df_model: {df_model.shape}")
+print(f"Columns:  {list(df_model.columns)}")
 ```
 
-*(No separate report text — column drop is mentioned in 3C below.)*
+*(No separate report text — column drop is documented in 3C.)*
 
 ---
 
-## Cell 3 — Data validation checks
+## Cell 3 — Pre-split validation
 
 ```python
-# ── Pre-split validation ────────────────────────────────────────
-# One cell, all checks.  Confirms the dataset is clean and documents
-# two distributional quirks relevant to modelling pitfalls.
+# ── Pre-split integrity checks (A) ─────────────────────────────
+# All checks run on df_model before any splitting or transformation.
 
 # 1. Missing values
-missing_total = df_model.isnull().sum().sum()
-print(f"1. Total missing values: {missing_total}")
+print(f"1. Missing values:       {df_model.isnull().sum().sum()}")
 
 # 2. Duplicate rows
-n_dupes = df_model.duplicated().sum()
-print(f"2. Duplicate rows:       {n_dupes}")
+print(f"2. Duplicate rows:       {df_model.duplicated().sum()}")
 
 # 3. Target is binary
 print(f"3. Target unique values: {sorted(df_model[TARGET].unique())}")
 
-# 4. Range checks
+# 4. Key ranges
 print(f"4. Age range:            {df_model['Age'].min()} – {df_model['Age'].max()}")
 print(f"   CreditScore range:    {df_model['CreditScore'].min()} – {df_model['CreditScore'].max()}")
 print(f"   Balance range:        {df_model['Balance'].min():.2f} – {df_model['Balance'].max():.2f}")
 
-# 5. Overall class balance
-churn_rate = df_model[TARGET].mean()
-print(f"5. Overall churn rate:   {churn_rate:.4f}")
+# 5. Overall churn rate
+print(f"5. Overall churn rate:   {df_model[TARGET].mean():.4f}")
 
 # ── Modelling pitfalls ──────────────────────────────────────────
-# 6. Zero-balance fraction — Balance has a large spike at exactly 0,
-#    creating a bimodal distribution that may affect distance-based
-#    models and tree split points.
-zero_bal_frac = (df_model["Balance"] == 0).mean()
-print(f"\n6. Fraction Balance == 0:  {zero_bal_frac:.4f}")
+# 6. Zero-balance fraction
+print(f"\n6. Balance == 0 fraction: {(df_model['Balance'] == 0).mean():.4f}")
 
-# 7. NumOfProducts distribution — categories 3 and 4 have very few
-#    rows, which can cause unstable estimates and noisy splits.
-print(f"7. NumOfProducts value counts:")
+# 7. NumOfProducts distribution
+print(f"7. NumOfProducts counts:")
 print(df_model["NumOfProducts"].value_counts().sort_index().to_string())
 ```
 
@@ -124,18 +124,16 @@ Before splitting, the following checks confirm the dataset is modelling-ready.
 
 - **Zero-balance spike.**  **[fill]%** of rows have `Balance == 0`,
   creating a bimodal distribution (visible in the EDA histogram, Plot 1).
-  StandardScaler will centre this spike but cannot remove the bimodality.
+  StandardScaler centres this spike but cannot remove the bimodality.
   Tree-based models handle this naturally; for linear models, a binary
-  `HasBalance` indicator could be added in future iterations, but it is
+  `HasBalance` indicator could be added in future iterations, but is
   omitted here to keep the baseline pipeline minimal.
 
-- **NumOfProducts rare categories.**  Products 1 and 2 dominate, while
-  products **[fill]** and **[fill]** have very few rows (**[fill]** and
-  **[fill]** respectively).  These small groups can cause unstable
-  cross-validation folds and noisy tree splits.  The current pipeline
-  treats `NumOfProducts` as numeric (scaled), which sidesteps the
-  rare-category problem.  If treated categorically in future work,
-  grouping 3+ into a single bin would be advisable.
+- **NumOfProducts rare categories.**  Products 1 and 2 dominate; products
+  **[fill]** and **[fill]** have very few rows (**[fill]** and **[fill]**
+  respectively).  Small groups can cause noisy tree splits.  The pipeline
+  treats `NumOfProducts` as numeric (scaled), sidestepping the
+  rare-category problem.
 
 ---
 
@@ -143,9 +141,7 @@ Before splitting, the following checks confirm the dataset is modelling-ready.
 
 ```python
 # ── Stratified split ────────────────────────────────────────────
-# Two-step procedure with the same seed for reproducibility:
-#   Step 1: 70% train  vs  30% temp
-#   Step 2: 50/50 temp → 15% val + 15% test
+# Two-step procedure:  70% train vs 30% temp → 50/50 → 15% val + 15% test
 SEED = 42
 
 X = df_model.drop(columns=[TARGET])
@@ -160,9 +156,7 @@ X_val, X_test, y_val, y_test = train_test_split(
 
 # Confirm sizes and stratification
 for name, sy in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
-    n = len(sy)
-    n1 = int(sy.sum())
-    print(f"  {name:5s}: n={n:5d}, churn={n1:4d}, rate={n1/n:.4f}")
+    print(f"  {name:5s}: n={len(sy):5d}, churn={int(sy.sum()):4d}, rate={sy.mean():.4f}")
 ```
 
 ### Report text — 3A  Split Discipline
@@ -218,13 +212,10 @@ categorical_pipe = Pipeline([
     ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
 ])
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", numeric_pipe,      NUMERIC),
-        ("cat", categorical_pipe,   CATEGORICAL),
-    ],
-    remainder="drop",
-)
+preprocessor = ColumnTransformer([
+    ("num", numeric_pipe,    NUMERIC),
+    ("cat", categorical_pipe, CATEGORICAL),
+], remainder="drop")
 
 X_train_t = preprocessor.fit_transform(X_train)
 X_val_t   = preprocessor.transform(X_val)
@@ -243,14 +234,51 @@ A single `sklearn.compose.ColumnTransformer` applies two sub-pipelines:
 
 | Sub-pipeline | Columns | Steps | Rationale |
 |-------------|---------|-------|-----------|
-| Numeric | CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard, IsActiveMember, EstimatedSalary | MedianImputer → StandardScaler | Median imputation is defensive (no nulls exist, but future data might).  StandardScaler is needed for LogReg and MLP; tree models are scale-invariant. |
+| Numeric | CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard, IsActiveMember, EstimatedSalary | MedianImputer → StandardScaler | Median imputation is defensive (no nulls exist, but guards against future data).  StandardScaler is needed for LogReg and MLP; tree models are scale-invariant. |
 | Categorical | Geography, Gender | MostFrequentImputer → OneHotEncoder | `handle_unknown="ignore"` produces all-zero rows for unseen categories.  No ordinal encoding used. |
 
-`remainder="drop"` excludes any unlisted column.  Identifier columns were
-already removed when creating `df_model`.
+`remainder="drop"` excludes any unlisted column.  Identifier columns
+(RowNumber, CustomerId, Surname) were already removed when creating
+`df_model`.
 
 **Output features:** **[fill]** total — **[fill]** scaled numeric +
 **[fill]** one-hot-encoded (Geography × 3, Gender × 2).
+
+**Post-preprocessing validation (Cell 6)** confirms: row counts match the
+y-splits, no NaN values in transformed arrays, feature count equals the
+expected total, and `handle_unknown="ignore"` correctly produces all-zero
+Geography columns for an unseen category.
+
+---
+
+## Cell 6 — Post-preprocessing checks
+
+```python
+# ── Post-preprocessing validation (B) ──────────────────────────
+
+# 1. Row counts match y splits
+assert X_train_t.shape[0] == len(y_train), "Train row mismatch"
+assert X_val_t.shape[0]   == len(y_val),   "Val row mismatch"
+assert X_test_t.shape[0]  == len(y_test),  "Test row mismatch"
+print(f"1. Row counts match: Train={X_train_t.shape[0]}, Val={X_val_t.shape[0]}, Test={X_test_t.shape[0]}")
+
+# 2. No NaNs in transformed arrays
+print(f"2. NaNs — Train: {np.isnan(X_train_t).sum()}, Val: {np.isnan(X_val_t).sum()}, Test: {np.isnan(X_test_t).sum()}")
+
+# 3. Feature count
+n_ohe = len(feature_names) - len(NUMERIC)
+print(f"3. Features: {X_train_t.shape[1]} ({len(NUMERIC)} numeric + {n_ohe} OHE = {len(feature_names)})")
+
+# 4. handle_unknown test — unseen category → all-zero OHE columns
+test_row = X_val.iloc[[0]].copy()
+test_row["Geography"] = "Atlantis"
+test_out = preprocessor.transform(test_row)
+geo_cols = test_out[0, len(NUMERIC):len(NUMERIC) + 3]
+print(f"4. handle_unknown: unseen 'Atlantis' → Geography OHE = {geo_cols}")
+print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
+```
+
+*(Checks are documented in the 3C report text above.)*
 
 ---
 
@@ -258,13 +286,14 @@ already removed when creating `df_model`.
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
-| Initial Task 3 (v1) | Agent created `src/preprocessing.py` with 60/20/20 split, HasBalance engineered feature, and saved three output files (split_indices.json, preprocessor.joblib, validation_report.json) (Log #19, Decision #19) | I reviewed and decided the setup was over-engineered: HasBalance is unnecessary for a minimal rubric-aligned submission, 70/15/15 gives more training data, and output files add clutter when Task 4 can call the same functions |
-| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed all output file saving, added Balance range check, simplified validation to print-only (Log #20, Decision #20) | [fill after running notebook cells] |
-| df naming | Agent initially used `df = df.drop(...)`, silently overwriting the EDA dataframe (Log #21) | I requested `df_model` to preserve `df` (the raw EDA dataframe) so all Task 2 cells remain re-runnable without side-effects (Decision #21) |
-| Gender encoding | Agent recommended keeping OneHotEncoder without `drop="first"` or manual binary encoding — two collinear columns are harmless (regularisation for LogReg/MLP, tree models unaffected), and both columns aid Task 4 feature importance (Log #22, Decision #22) | I asked whether manual Male=1/Female=0 encoding was needed; agent's recommendation was correct — no change required |
-| Validation structure | Agent had validation checks in four places (Cell 4, Cell 5, report table 3B, checklist 3D). Redundant checklist section 3D repeated 3B almost verbatim (Log #21, #23) | I merged all validation into one cell and one report table, removed the duplicate checklist section (Decision #23) |
-| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts value counts as two extra prints in the validation cell, referenced in report text as modelling pitfalls (Log #23, Decision #24) | [fill: confirm output values match report text] |
-| log1p for Balance | Agent recommended skipping log1p: HistGradientBoosting is monotonic-invariant, LogReg/MLP get StandardScaler, and adding FunctionTransformer for one column adds pipeline complexity for uncertain gain (Log #20, Decision #20) | [fill: agree/disagree with rationale] |
-| Draft structure | Agent initially used a three-part layout (coding plan / all cells / all report text as separate sections), requiring the reader to jump between parts (Log #21, #23) | I requested report text directly under each corresponding code cell so the document reads top-to-bottom without jumping (Log #24, Decision #25) |
-| Notebook cells (final) | Agent provided 5 self-contained cells (imports, df_model, validation, split, pipeline) with no src imports, consistent with notebook style from Task 2 (Log #23, #24) | [fill: confirm cells run, outputs match expected values] |
+| Initial Task 3 (v1) | Agent created `src/preprocessing.py` with 60/20/20 split, HasBalance engineered feature, and saved three output files (Log #19, Decision #19) | I reviewed and decided the setup was over-engineered: HasBalance unnecessary, 70/15/15 gives more training data, output files add clutter |
+| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed file saving, added Balance range check, print-only validation (Log #20, Decision #20) | [fill after running notebook cells] |
+| df naming | Agent initially used `df = df.drop(...)`, overwriting the EDA dataframe (Log #21). Later revised to `df_model` only (Decision #21) | I requested `df_raw` + `df_model` to make naming explicit: `df_raw` preserves the full dataset, `df_model` drops identifiers (Decision #26) |
+| Gender encoding | Agent recommended keeping OHE without `drop="first"` — collinear columns harmless with regularisation, aids interpretability (Log #22, Decision #22) | I asked whether manual binary encoding was needed; agent's recommendation correct — no change required |
+| Validation staging | Agent initially had all checks pre-split only (Log #21, #23). Redundant checklist repeated validation table (Decision #23) | I specified two-stage validation: (A) pre-split integrity + pitfalls in Cell 3, (B) post-preprocessing checks in Cell 6 (Decision #26) |
+| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | [fill: confirm output values match report text] |
+| log1p for Balance | Agent recommended skipping log1p: HistGBT is monotonic-invariant, LogReg/MLP get StandardScaler (Log #20, Decision #20) | [fill: agree/disagree with rationale] |
+| Post-preprocessing checks | Agent added Cell 6 with 4 checks: shapes, NaNs, feature count, handle_unknown test (Log #25, Decision #26) | [fill: confirm all 4 checks pass] |
+| Draft structure | Agent initially used three-part layout (Log #21, #23); later interleaved report text under each cell (Log #24, Decision #25) | I requested interleaved layout so the document reads top-to-bottom |
+| Notebook cells (final) | Agent provided 6 self-contained cells with no src imports, consistent with Task 2 notebook style (Log #25, Decision #26) | [fill: confirm all cells run, outputs match expected values] |
 | *[add rows as project progresses]* | | |
