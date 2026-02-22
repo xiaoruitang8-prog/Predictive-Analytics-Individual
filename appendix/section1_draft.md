@@ -78,9 +78,9 @@ the customer leaves.
 The table below documents which parts of this section were drafted by the
 AI coding agent and what I personally verified or corrected.
 
-| Step | What the Agent Did | What I Verified / Corrected | Evidence |
-|------|--------------------|-----------------------------|----------|
-| Project scaffolding | Created repo structure, README, `.gitignore`, `requirements.txt` | Reviewed all files; corrected filename inconsistency (`Churn Modelling` → `Churn_Modelling`); required dummy baseline + MLP in model set; required `.xlsx` gitignore | Appendix: Agent Log #1, Decision Register #1–5; commit `[hash_step0_corrections]` |
-| Data access setup | Created `src/data_loader.py` with full → sample fallback and Kaggle link; committed 200-row sample CSV; updated README | Ran sanity-check command; tested full-load, sample-fallback, and missing-file error paths; confirmed full CSV not tracked in git, sample committed | Appendix: Agent Log #3, #7, #8; Decision Register #8, #9; screenshot `[screenshot_data_check]` |
-| Section 1 draft | Drafted this markdown (1A–1E) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation | Appendix: Agent Log #4; commit `[hash_section1_final]` |
-| *[add rows as project progresses]* | | | |
+| Step | What the Agent Did | What I Verified / Corrected |
+|------|--------------------|-----------------------------|
+| Project scaffolding | Created repo structure, README, `.gitignore`, `requirements.txt` | Reviewed all files; corrected filename inconsistency (`Churn Modelling` → `Churn_Modelling`); required dummy baseline + MLP in model set; required `.xlsx` gitignore |
+| Data access setup | Created `src/data_loader.py` with full → sample fallback and Kaggle link; committed 200-row sample CSV; updated README | Ran sanity-check command; tested full-load, sample-fallback, and missing-file error paths; confirmed full CSV not tracked in git, sample committed |
+| Section 1 draft | Drafted this markdown (1A–1E) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation |
+| *[add rows as project progresses]* | | |
