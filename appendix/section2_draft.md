@@ -116,12 +116,43 @@ plus `Exited` (explicitly excluding `RowNumber`, `CustomerId`).  Look for
 and (b) features with the highest absolute correlation to `Exited` to
 identify the most informative predictors.
 
-*Dataframe validation.*
+*Code (notebook cell).*
 ```python
-corr_cols = ["CreditScore", "Age", "Tenure", "Balance",
-             "NumOfProducts", "HasCrCard", "IsActiveMember",
-             "EstimatedSalary", "Exited"]
-df[corr_cols].corr()
+# Select only the numeric feature columns plus the target column,
+# then compute the Pearson correlation matrix (values between -1 and 1).
+corr = df[NUMERIC + [TARGET]].corr()
+# Create a figure and axis for the heatmap.
+# figsize controls the width and height of the plot in inches.
+fig, ax = plt.subplots(figsize=(8, 6))
+# Display the correlation matrix as an image (heatmap).
+# cmap sets the colour scheme, and vmin/vmax fix the scale so -1 and 1 are consistent.
+im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
+# Set tick positions on both axes (one tick per column/row in the correlation matrix).
+ax.set_xticks(range(len(corr)))
+ax.set_yticks(range(len(corr)))
+# Label the ticks with the column names.
+# Rotate x labels so they do not overlap.
+ax.set_xticklabels(corr.columns, rotation=45, ha="right")
+ax.set_yticklabels(corr.columns)
+# Add the correlation value as text inside each heatmap cell.
+# corr.iloc[i, j] accesses the correlation at row i, column j.
+for i in range(len(corr)):
+    for j in range(len(corr)):
+        ax.text(
+            j, i, f"{corr.iloc[i, j]:.2f}",  # show correlation to 2 decimals
+            ha="center", va="center",         # centre text in the cell
+            fontsize=8
+        )
+# Add a colorbar to explain the mapping between colours and correlation values.
+fig.colorbar(im, ax=ax, shrink=0.8)
+# Add a title to describe the plot.
+ax.set_title("Plot 3 Correlation Heatmap Numeric plus Target")
+# Adjust layout so labels and title fit nicely.
+fig.tight_layout()
+# Save the plot image into the outputs folder for evidence or reporting.
+fig.savefig("outputs/eda_03_correlation_heatmap.png", dpi=150)
+# Display the heatmap in the notebook.
+plt.show()
 ```
 
 *Interpretation (fill after running).*
@@ -140,62 +171,34 @@ df[corr_cols].corr()
 this dedicated check systematically tests whether any feature leaks
 information about the target (`Exited`).  Leakage would mean a feature
 is derived from or only knowable after the churn event, giving
-artificially high predictive power that would not generalise.
+artificially high predictive power that would not generalise.  This cell
+re-uses the `corr` matrix computed in the heatmap cell above.
 
 *Code (notebook cell — runs after Plot 3).*
 ```python
 # --- Leakage Risk Check ---
-# Re-use the correlation matrix from the heatmap cell
-corr_cols = ["CreditScore", "Age", "Tenure", "Balance",
-             "NumOfProducts", "HasCrCard", "IsActiveMember",
-             "EstimatedSalary", "Exited"]
-corr_matrix = df[corr_cols].corr()
+# Extract absolute correlations with the target, excluding the target itself.
+# corr was computed in the heatmap cell: corr = df[NUMERIC + [TARGET]].corr()
+corr_with_target = corr[TARGET].drop(TARGET).abs().sort_values(ascending=False)
 
-# 1. Flag any feature with |r| > 0.8 with Exited (high leakage risk)
-target_corr = corr_matrix["Exited"].drop("Exited").abs().sort_values(ascending=False)
-print("=== Correlation with Exited (absolute, sorted) ===")
-print(target_corr.to_string())
+# Flag any feature that is suspiciously correlated with the target
+# (rule of thumb: |r| > 0.8 suggests possible leakage).
+threshold = 0.8
+suspects = corr_with_target[corr_with_target > threshold]
+print("Absolute correlation with target:")
+print(corr_with_target.round(3))
 print()
-
-LEAK_THRESHOLD = 0.8
-leaky = target_corr[target_corr > LEAK_THRESHOLD]
-if leaky.empty:
-    print(f"✓ No feature exceeds |r| > {LEAK_THRESHOLD} with Exited.")
-    print("  Leakage via linear correlation is unlikely.")
+if suspects.empty:
+    print("No correlation based leakage flagged (no feature has |r| > 0.8).")
 else:
-    print(f"⚠ WARNING — features above |r| > {LEAK_THRESHOLD} threshold:")
-    for feat, val in leaky.items():
-        print(f"  {feat}: |r| = {val:.4f}  ← investigate temporal availability")
-
-# 2. Domain-sense check: flag features that conceptually
-#    might only be known after churn (none expected in this dataset,
-#    but good practice to document the reasoning)
-print()
-print("=== Domain Leakage Review ===")
-domain_notes = {
-    "CreditScore":     "Available before churn decision — no leakage.",
-    "Age":             "Static demographic — no leakage.",
-    "Tenure":          "Measured at snapshot time — no leakage.",
-    "Balance":         "Account balance at snapshot — no leakage.",
-    "NumOfProducts":   "Product count at snapshot — no leakage.",
-    "HasCrCard":       "Binary flag at snapshot — no leakage.",
-    "IsActiveMember":  "Activity flag at snapshot — no leakage.",
-    "EstimatedSalary": "Estimated at snapshot — no leakage.",
-}
-for feat, note in domain_notes.items():
-    print(f"  {feat}: {note}")
-
-print()
-print("Conclusion: No leakage detected — all features are snapshot-level")
-print("attributes available before the churn outcome is determined.")
+    print("Potential leakage features (|r| > 0.8):", list(suspects.index))
 ```
 
 *Interpretation (fill after running).*
 > - Highest |correlation with Exited|: `[top_corr_feature]`
 >   (|r| = **[top_corr_val]**).
 > - [If all < 0.8: "No feature exceeds the |r| > 0.8 leakage threshold.
->   All features are snapshot-level attributes available before the churn
->   event — leakage is unlikely."]
+>   Leakage via linear correlation is unlikely."]
 > - [If any > 0.8: "**Warning**: `[feature]` has |r| = [val].
 >   Investigate whether this feature would be available at prediction
 >   time before proceeding to modelling."]
@@ -338,4 +341,5 @@ the notebook and cross-checking against the raw data.
 | Section 2 draft (this document) | Agent drafted 2A–2E with placeholders (Log #12, Decision #13). Agent included `NumOfProducts` in Plot 3 section but the actual histogram does not show it (Log #14, Decision #14). Full draft rewritten during consolidation from 10 to 6 plots (Log #15, Decision #15), then updated again when Plot 5 was dropped (Log #16, Decision #16) | I caught the `NumOfProducts` error in Plot 3 — the draft claimed a finding the plot cannot support, so I removed it (Decision #14). Filled all `[placeholders]` after running the full notebook; cross-checked every percentage and count against `value_counts()`, `groupby().mean()`, and `.corr()` outputs | Appendix: Agent Log #12, #14, #15, #16; Decision Register #13, #14, #15, #16; commit `[hash_section2_final]` |
 | Data-quality checks (2C) | Agent listed 12 checks framed as hypotheses with status column for auditable tracking (Log #12, Decision #13) | I confirmed or ruled out each check by running the validation commands in the notebook on the full dataset. Each status cell updated with result and evidence | Section 2C status column filled in; notebook cell outputs |
 | Boxplot findings integration (2B.5, 2C, 2D) | Agent integrated two sets of boxplot analysis notes into a unified interpretation for Plot 5: per-feature paragraphs (Age, Balance, CreditScore, EstimatedSalary), an outlier severity table, confirmed data-quality checks #9 and #12 in Section 2C, and added three new action items (#11–#13) to Section 2D covering Balance heavy-tail treatment, CreditScore outlier monitoring, and L1/L2 regularisation for overlapping features | I provided the raw boxplot observations (distributional shifts, outlier patterns, zero-balance cluster, modelling pitfalls); I reviewed the agent's merged write-up against my notes and the actual Plot 5 output to verify accuracy of claims and severity ratings | Agent Log #16; commit `658a95c` |
+| Correlation heatmap / leakage split (2B.3, 2B.3b) | Agent drafted Plot 3 as "Correlation Heatmap (+ Leakage Check)" with a single combined section containing both heatmap code and a leakage risk check with domain-sense review (Log #18, Decision #18). Agent's leakage code included a domain-notes dictionary and formatted output with unicode checkmarks | I identified the repetition: the combined section was doing two things (insight heatmap + leakage testing) in one block. I split them into Plot 3 (heatmap only) and Plot 3b (leakage check only). I wrote both notebook cells myself — the heatmap uses `ax.imshow` with annotated correlation values, and the leakage check re-uses the `corr` matrix to flag features with |r| > 0.8. Agent's domain-sense dictionary was dropped in favour of a simpler threshold-based check matching my notebook style | Agent Log #18; Decision Register #18 |
 | *[add rows as project progresses]* | | | |
