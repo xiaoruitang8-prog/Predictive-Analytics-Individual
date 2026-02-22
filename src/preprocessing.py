@@ -3,19 +3,13 @@ Task 3 — Preprocessing utilities for the churn classification project.
 
 Provides:
   - Feature-column constants
-  - Feature engineering (HasBalance indicator)
-  - Stratified 60/20/20 train-validation-test split
+  - Stratified 70/15/15 train-validation-test split
   - ColumnTransformer-based preprocessing pipeline
-  - Data validation checks
+  - Data validation checks (print-only, no output files)
 
 Leakage discipline:
   - The preprocessor is fit ONLY on the training split
-  - Deterministic feature engineering (HasBalance) is applied before
-    splitting — no statistics are learned, so no leakage risk
 """
-
-import json
-import os
 
 import numpy as np
 import pandas as pd
@@ -28,7 +22,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from src.data_loader import ID_COLS, TARGET
 
 # ── Feature column constants ─────────────────────────────────────
-# These match the columns remaining after load_churn_data(drop_ids=True).
+
 NUMERIC_FEATURES = [
     "CreditScore",
     "Age",
@@ -42,180 +36,125 @@ NUMERIC_FEATURES = [
 
 CATEGORICAL_FEATURES = ["Geography", "Gender"]
 
-ENGINEERED_FEATURES = ["HasBalance"]
-
-ALL_FEATURES = NUMERIC_FEATURES + ENGINEERED_FEATURES + CATEGORICAL_FEATURES
-
-
-# ── Feature engineering ──────────────────────────────────────────
-
-
-def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add deterministic engineered features.
-
-    Currently adds:
-      - HasBalance: 1 if Balance > 0, else 0
-
-    Rationale (EDA Section 2D, Action #3):
-      ~36% of customers have exactly zero balance, creating a bimodal
-      distribution visible in Plot 1 and Plot 5.  A binary indicator
-      lets tree-based models split on zero vs non-zero cleanly, and
-      prevents the zero-mass from distorting distance-based models.
-
-    This is a deterministic transform (no learned statistics),
-    so it is safe to apply before train-test splitting.
-    """
-    df = df.copy()
-    df["HasBalance"] = (df["Balance"] > 0).astype(int)
-    return df
+SEED = 42
 
 
 # ── Stratified split ─────────────────────────────────────────────
 
 
-def stratified_split(
-    df: pd.DataFrame,
-    target: str = TARGET,
-    seed: int = 42,
-    train_size: float = 0.60,
-    val_size: float = 0.20,
-    test_size: float = 0.20,
-):
-    """Stratified 60/20/20 train-validation-test split.
+def stratified_split(df, target=TARGET, seed=SEED):
+    """Stratified 70/15/15 train-validation-test split.
 
-    Returns (train_df, val_df, test_df) with original indices preserved.
+    Two-step split:
+      1. train (70%) vs temp (30%)
+      2. temp -> val (50% of 30% = 15%) vs test (50% of 30% = 15%)
     """
-    assert abs(train_size + val_size + test_size - 1.0) < 1e-9
-
-    # First split: train (60%) vs temp (40%)
     train_df, temp_df = train_test_split(
-        df,
-        test_size=(val_size + test_size),
-        stratify=df[target],
-        random_state=seed,
+        df, test_size=0.30, stratify=df[target], random_state=seed,
     )
-
-    # Second split: val (50% of 40% = 20%) vs test (50% of 40% = 20%)
     val_df, test_df = train_test_split(
-        temp_df,
-        test_size=test_size / (val_size + test_size),
-        stratify=temp_df[target],
-        random_state=seed,
+        temp_df, test_size=0.50, stratify=temp_df[target], random_state=seed,
     )
-
     return train_df, val_df, test_df
 
 
 # ── Preprocessing pipeline ───────────────────────────────────────
 
 
-def build_preprocessor() -> ColumnTransformer:
-    """Build a ColumnTransformer for numeric + categorical features.
+def build_preprocessor():
+    """Single ColumnTransformer: numeric (imputer + scaler) + categorical (OHE).
 
-    Numeric pipeline:  SimpleImputer(median) -> StandardScaler
-    Categorical pipeline:  SimpleImputer(most_frequent) -> OneHotEncoder
+    Numeric:  SimpleImputer(median) -> StandardScaler
+    Categorical:  SimpleImputer(most_frequent) -> OneHotEncoder
 
-    The HasBalance engineered feature is included in the numeric list.
-    OneHotEncoder uses handle_unknown="ignore" so that unseen categories
-    at transform time produce all-zero columns instead of raising.
+    handle_unknown="ignore" produces all-zero columns for unseen categories.
+    remainder="drop" excludes the target and any unlisted columns.
     """
-    numeric_pipeline = Pipeline([
+    numeric_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
     ])
-
-    categorical_pipeline = Pipeline([
+    categorical_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("encoder", OneHotEncoder(
-            handle_unknown="ignore",
-            sparse_output=False,
-        )),
+        ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
-
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
-            ("num", numeric_pipeline, NUMERIC_FEATURES + ENGINEERED_FEATURES),
-            ("cat", categorical_pipeline, CATEGORICAL_FEATURES),
+            ("num", numeric_pipe, NUMERIC_FEATURES),
+            ("cat", categorical_pipe, CATEGORICAL_FEATURES),
         ],
         remainder="drop",
     )
-
-    return preprocessor
 
 
 # ── Data validation ──────────────────────────────────────────────
 
 
-def validate_data(df: pd.DataFrame, stage: str = "raw") -> dict:
-    """Run data validation checks and return a report dict.
+def validate_data(df):
+    """Run validation checks and print results.
 
-    Checks (raises ValueError on critical failures):
-      1. Expected columns exist
-      2. Target is binary (0, 1)
-      3. ID columns not present in feature set
-      4. Missing values per column
-      5. Duplicate rows
-      6. Age range check
-      7. CreditScore range check
+    Checks:
+      1. Missing values per column and total
+      2. Duplicate rows
+      3. Range checks: Age, CreditScore, Balance (min/max)
+      4. Target is binary {0, 1}
+      5. ID columns not in features
+      6. Overall class balance
+
+    Raises ValueError on critical failures.
     """
-    report = {"stage": stage, "n_rows": len(df), "checks": {}}
+    print("--- Data Validation ---")
+    print(f"Rows: {len(df)}, Columns: {len(df.columns)}")
 
-    # 1. Expected columns
-    expected = set(NUMERIC_FEATURES + CATEGORICAL_FEATURES + [TARGET])
-    present = set(df.columns)
-    missing_cols = sorted(expected - present)
-    report["checks"]["expected_columns_missing"] = missing_cols
-    if missing_cols:
-        raise ValueError(f"Missing expected columns: {missing_cols}")
-
-    # 2. Target is binary
-    target_vals = sorted(df[TARGET].unique().tolist())
-    report["checks"]["target_values"] = target_vals
-    if not set(target_vals).issubset({0, 1}):
-        raise ValueError(f"Target has unexpected values: {target_vals}")
-
-    # 3. ID columns not in features
-    id_cols_found = [c for c in ID_COLS if c in df.columns]
-    report["checks"]["id_columns_present"] = id_cols_found
-    if id_cols_found:
-        raise ValueError(
-            f"ID columns still present: {id_cols_found}. "
-            f"Use load_churn_data(drop_ids=True)."
-        )
-
-    # 4. Missing values
+    # 1. Missing values
     missing = df.isnull().sum()
-    missing_dict = {col: int(v) for col, v in missing.items() if v > 0}
-    report["checks"]["missing_values"] = missing_dict
-    report["checks"]["total_missing"] = int(missing.sum())
+    total_missing = int(missing.sum())
+    print(f"\nMissing values (total): {total_missing}")
+    if total_missing > 0:
+        for col, n in missing[missing > 0].items():
+            print(f"  {col}: {n}")
 
-    # 5. Duplicates
+    # 2. Duplicates
     n_dupes = int(df.duplicated().sum())
-    report["checks"]["duplicate_rows"] = n_dupes
+    print(f"Duplicate rows: {n_dupes}")
 
-    # 6. Age range
+    # 3. Range checks
     age_min, age_max = int(df["Age"].min()), int(df["Age"].max())
-    report["checks"]["age_range"] = [age_min, age_max]
-    if age_min < 0:
-        raise ValueError(f"Negative age found: {age_min}")
-
-    # 7. CreditScore range
     cs_min, cs_max = int(df["CreditScore"].min()), int(df["CreditScore"].max())
-    report["checks"]["credit_score_range"] = [cs_min, cs_max]
+    bal_min, bal_max = float(df["Balance"].min()), float(df["Balance"].max())
+    print(f"Age range: {age_min} – {age_max}")
+    print(f"CreditScore range: {cs_min} – {cs_max}")
+    print(f"Balance range: {bal_min:.2f} – {bal_max:.2f}")
+    if age_min < 0:
+        raise ValueError(f"Negative age: {age_min}")
 
-    return report
+    # 4. Target binary
+    target_vals = set(df[TARGET].unique())
+    if not target_vals.issubset({0, 1}):
+        raise ValueError(f"Target has unexpected values: {target_vals}")
+    print(f"Target values: {sorted(target_vals)}")
+
+    # 5. ID columns
+    id_found = [c for c in ID_COLS if c in df.columns]
+    if id_found:
+        raise ValueError(f"ID columns still present: {id_found}")
+    print(f"ID columns in features: none (correct)")
+
+    # 6. Overall class balance
+    vc = df[TARGET].value_counts()
+    churn_rate = vc.get(1, 0) / len(df)
+    print(f"Overall class balance: {vc.to_dict()}, churn rate: {churn_rate:.4f}")
+
+    print("--- All checks passed ---\n")
 
 
-def split_class_balance(train_df, val_df, test_df, target=TARGET):
-    """Report class balance across splits."""
-    balance = {}
-    for name, split_df in [("train", train_df), ("val", val_df), ("test", test_df)]:
-        counts = split_df[target].value_counts().to_dict()
-        total = len(split_df)
-        balance[name] = {
-            "n": total,
-            "class_0": int(counts.get(0, 0)),
-            "class_1": int(counts.get(1, 0)),
-            "churn_rate": round(counts.get(1, 0) / total, 4),
-        }
-    return balance
+def print_split_balance(train_df, val_df, test_df, target=TARGET):
+    """Print class balance for each split."""
+    print("--- Class Balance Per Split ---")
+    for name, split_df in [("Train", train_df), ("Val", val_df), ("Test", test_df)]:
+        n = len(split_df)
+        n1 = int(split_df[target].sum())
+        n0 = n - n1
+        print(f"  {name:5s}: n={n:5d}, class_0={n0:4d}, class_1={n1:4d}, "
+              f"churn_rate={n1/n:.4f}")
+    print()

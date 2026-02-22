@@ -37,7 +37,7 @@ data/               <- sample_customer_churn.csv (committed) + customer_churn.cs
 src/
   data_loader.py    <- Shared data-loading utility (file check + error msg)
   preprocessing.py  <- Feature constants, ColumnTransformer, split, validation
-  03_preprocess.py  <- Task 3 entry point: validate, split, preprocess, save
+  03_preprocess.py  <- Task 3 entry point: validate, split, preprocess (print-only)
   run_all.py        <- Single entry point to reproduce everything
 outputs/            <- Plots, metrics, saved models (git-ignored heavy files)
 appendix/           <- Agent log and decision register for the report
@@ -60,7 +60,7 @@ python src/run_all.py
 All random seeds are fixed to `42`. Outputs are saved to `outputs/`.
 
 ## Methodology
-- Stratified 60/20/20 train-validation-test split
+- Stratified 70/15/15 train-validation-test split
 - Single scikit-learn `Pipeline` with `ColumnTransformer` (no leakage)
 - Model selection on validation set (DummyClassifier baseline, Logistic Regression, HistGradientBoosting, MLP with early stopping)
 - Final evaluation on held-out test set (reported once)

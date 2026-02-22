@@ -2,17 +2,20 @@
 
 ## 3A  Split Discipline
 
-A **stratified 60 / 20 / 20 train-validation-test split** is applied using
+A **stratified 70 / 15 / 15 train-validation-test split** is applied using
 `sklearn.model_selection.train_test_split` with `random_state=42`.
-Stratification ensures each split preserves the original class balance of
-`Exited`, preventing the minority class from being under- or over-represented
-in any partition.
+Stratification on `Exited` ensures each split preserves the original class
+balance.
 
 | Split | Purpose | Fraction | Rows (full dataset) |
 |-------|---------|----------|---------------------|
-| Train | Fit preprocessing and model parameters | 60% | **[train_n]** |
-| Validation | Tune hyperparameters, compare models | 20% | **[val_n]** |
-| Test | Final held-out evaluation (reported once) | 20% | **[test_n]** |
+| Train | Fit preprocessing and model parameters | 70% | **[train_n]** |
+| Validation | Tune hyperparameters, compare models | 15% | **[val_n]** |
+| Test | Final held-out evaluation (reported once) | 15% | **[test_n]** |
+
+**Two-step procedure.**  First split: train (70%) vs temp (30%).  Second
+split: temp into val (50% of 30% = 15%) and test (50% of 30% = 15%).  Both
+calls use `random_state=42`.
 
 **Leakage prevention.**  The `ColumnTransformer` is **fit only on the
 training split**.  Validation and test data are transformed using the
@@ -20,53 +23,26 @@ statistics (means, standard deviations, category vocabularies) learned from
 training data only.  This mirrors production conditions where future data
 is unseen at training time.
 
-**Reproducibility.**  Split indices are saved to `outputs/split_indices.json`
-so that Task 4 can reload the exact same partition.  The fitted preprocessor
-is saved to `outputs/preprocessor.joblib`.
+**Reproducibility.**  No output files are saved.  Task 4 reproduces the
+exact same partition by calling `stratified_split()` with the same seed.
 
 ---
 
-## 3B  Feature Engineering
-
-### HasBalance indicator
-
-A binary feature `HasBalance` (1 if `Balance > 0`, else 0) is added before
-splitting.
-
-**Rationale.**  EDA (Plot 1, Plot 5, Section 2D Action #3) revealed that
-approximately **[zero_bal_pct]%** of customers have exactly zero balance,
-creating a bimodal distribution.  Without an explicit indicator, tree-based
-models must find the split point at zero on their own (possible but
-inefficient), while distance-based models (Logistic Regression, MLP) are
-distorted by the zero-mass spike.
-
-**Verification.**
-```python
-# Run after loading data and adding engineered features:
-print((df["Balance"] == 0).mean())      # should match [zero_bal_pct]%
-print(df["HasBalance"].value_counts())   # counts for 0 and 1
-# Cross-check: HasBalance==0 rows should have Balance==0
-assert (df.loc[df["HasBalance"] == 0, "Balance"] == 0).all()
-```
-
-**Leakage risk.**  This is a deterministic transform — no statistics are
-learned from the data.  It is safe to apply before splitting because the
-same formula is applied identically at inference time.
-
----
-
-## 3C  Preprocessing Pipeline
+## 3B  Preprocessing Pipeline
 
 The preprocessing uses a single `sklearn.compose.ColumnTransformer` with
 two sub-pipelines:
 
 | Sub-pipeline | Columns | Steps | Notes |
 |-------------|---------|-------|-------|
-| Numeric | `CreditScore`, `Age`, `Tenure`, `Balance`, `NumOfProducts`, `HasCrCard`, `IsActiveMember`, `EstimatedSalary`, `HasBalance` | `SimpleImputer(strategy="median")` then `StandardScaler()` | Median imputation is robust to outliers (Age, Balance have long tails). StandardScaler centres and scales to unit variance. |
-| Categorical | `Geography`, `Gender` | `SimpleImputer(strategy="most_frequent")` then `OneHotEncoder(handle_unknown="ignore")` | `handle_unknown="ignore"` produces all-zero columns for unseen categories at transform time, preventing errors. |
+| Numeric | `CreditScore`, `Age`, `Tenure`, `Balance`, `NumOfProducts`, `HasCrCard`, `IsActiveMember`, `EstimatedSalary` | `SimpleImputer(strategy="median")` then `StandardScaler()` | Median imputation is defensive (dataset has no missing values, but future data might). StandardScaler centres and scales to unit variance — needed for LogReg and MLP; tree-based models are scale-invariant. |
+| Categorical | `Geography`, `Gender` | `SimpleImputer(strategy="most_frequent")` then `OneHotEncoder(handle_unknown="ignore")` | `handle_unknown="ignore"` produces all-zero columns for unseen categories at transform time. No ordinal encoding used. |
 
 `remainder="drop"` ensures any unlisted column (including the target) is
 excluded from the feature matrix.
+
+**Identifier columns.**  `RowNumber`, `CustomerId`, `Surname` are dropped
+by `load_churn_data(drop_ids=True)` before any processing.
 
 **Output features after transformation (fill after running):**
 > **[n_output_features]** total:
@@ -77,22 +53,21 @@ excluded from the feature matrix.
 
 ---
 
-## 3D  Data Validation Checks
+## 3C  Data Validation Checks
 
-The following checks run automatically before modelling via
-`preprocessing.validate_data()`.  Critical failures raise `ValueError`;
-non-critical issues are logged in the report.
+The following checks run automatically via `preprocessing.validate_data()`
+and print results to stdout.  Critical failures raise `ValueError`.
 
-| # | Check | Expected Result | Status |
-|---|-------|----------------|--------|
-| 1 | Expected columns exist | All of `CreditScore`, `Age`, `Tenure`, `Balance`, `NumOfProducts`, `HasCrCard`, `IsActiveMember`, `EstimatedSalary`, `Geography`, `Gender`, `Exited` present | **[pass/fail]** |
-| 2 | Target is binary | `Exited` values are exactly `{0, 1}` | **[pass/fail]** |
-| 3 | ID columns not in features | `RowNumber`, `CustomerId`, `Surname` absent (dropped by loader) | **[pass/fail]** |
-| 4 | Missing values | Count of nulls per column; total missing | **[n_missing_total]** |
-| 5 | Duplicate rows | Count of exact duplicate rows | **[n_dupes]** |
-| 6 | Age range | `min >= 0`; expected range roughly 18–92 | **[age_min]** – **[age_max]** |
-| 7 | CreditScore range | Expected range roughly 350–850 | **[cs_min]** – **[cs_max]** |
-| 8 | Class balance per split | Churn rate consistent across train/val/test (within ~1 pp of overall rate) | See table below |
+| # | Check | Expected Result | Actual Result |
+|---|-------|----------------|---------------|
+| 1 | Missing values per column and total | 0 missing (EDA confirmed) | **[fill]** |
+| 2 | Duplicate rows | 0 duplicates | **[fill]** |
+| 3 | Age range (min/max) | Roughly 18–92 | **[fill]** |
+| 4 | CreditScore range (min/max) | Roughly 350–850 | **[fill]** |
+| 5 | Balance range (min/max) | 0 to ~250k | **[fill]** |
+| 6 | Target is binary | Values exactly {0, 1} | **[fill]** |
+| 7 | ID columns not in features | RowNumber, CustomerId, Surname absent | **[fill]** |
+| 8 | Overall class balance | ~20% churn | **[fill]** |
 
 **Class balance per split (fill after running):**
 
@@ -104,32 +79,25 @@ non-critical issues are logged in the report.
 
 ---
 
-## 3E  How to Reproduce
+## 3D  How to Reproduce
 
 From the repo root:
 
 ```bash
-# Install dependencies (if not already done)
 pip install -r requirements.txt
-
-# Run Task 3 preprocessing
 python src/03_preprocess.py
 ```
 
-Expected outputs in `outputs/`:
-- `split_indices.json` — row indices for train, val, test
-- `preprocessor.joblib` — fitted ColumnTransformer (fit on train only)
-- `validation_report.json` — all checks + class balance + feature names
+All results are printed to stdout.  No output files are created.
 
 ---
 
-## 3F  Agent Plan vs. My Verification
+## 3E  Agent Plan vs. My Verification
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
-| Preprocessing module | Agent created `src/preprocessing.py` with feature constants, `add_engineered_features()`, `build_preprocessor()`, `stratified_split()`, `validate_data()`, `split_class_balance()` (Log #19, Decision #19) | [fill after reviewing code and running script] |
-| Entry point script | Agent created `src/03_preprocess.py` that loads data, validates, engineers features, splits, fits preprocessor on train only, saves all outputs (Log #19) | [fill after running `python src/03_preprocess.py` and checking outputs] |
-| HasBalance feature | Agent added `HasBalance = (Balance > 0).astype(int)` as a deterministic engineered feature, applied before splitting (Log #19, Decision #19) | [fill: verify with `(df["Balance"] == 0).mean()` and cross-check assertion] |
-| Validation checks | Agent implemented 7 checks covering columns, target, IDs, missing values, duplicates, Age range, CreditScore range (Log #19) | [fill: confirm all checks pass on full dataset; check validation_report.json] |
-| Section 3 draft | Agent drafted 3A–3F with placeholders | [fill all `[placeholders]` after running script on full dataset] |
+| Initial Task 3 (v1) | Agent created preprocessing with 60/20/20 split, HasBalance engineered feature, and saved three output files (split_indices.json, preprocessor.joblib, validation_report.json) (Log #19, Decision #19) | I reviewed and decided the setup was over-engineered: HasBalance is unnecessary for a minimal rubric-aligned submission, 70/15/15 gives more training data, and output files add clutter when Task 4 can call the same functions |
+| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed all output file saving, added Balance range check, simplified validation to print-only (Log #20, Decision #20) | [fill after running `python src/03_preprocess.py` and reviewing printed output] |
+| log1p for Balance | Agent recommended skipping log1p: HistGradientBoosting is monotonic-invariant, LogReg/MLP get StandardScaler, and adding FunctionTransformer for one column adds pipeline complexity for uncertain gain | [fill: agree/disagree with rationale] |
+| Section 3 draft | Agent drafted 3A–3E with placeholders | [fill all `[placeholders]` after running script on full dataset] |
 | *[add rows as project progresses]* | | |
