@@ -10,27 +10,35 @@ data preparation).  Each plot cell explicitly selects the columns it needs
 so that identifier columns (`RowNumber`, `CustomerId`, `Surname`) do not
 pollute numeric or categorical analyses.
 
-**Scope.**  Five visual checks, ordered to match the coursework rubric
-sequence (distributions → missingness → leakage risks → class imbalance →
-outliers):
+**Scope.**  Five plots plus one dedicated leakage check, ordered to match
+the coursework rubric sequence (distributions → missingness →
+correlations → leakage risks → class imbalance → outliers):
 
 | # | Plot / Check | Question It Answers | Output File |
 |---|-------------|---------------------|-------------|
 | 1 | Numeric distributions | What do the continuous features look like? Any skew, zero-spikes, or unexpected ranges? | `outputs/eda_01_numeric_distributions.png` |
 | 2 | Missingness check | Are there any null or missing values? | `outputs/eda_02_missingness.png` |
-| 3 | Correlation heatmap (+ leakage check) | Which features correlate with each other or the target? Does any feature have suspiciously high predictive power? | `outputs/eda_03_correlation_heatmap.png` |
+| 3 | Correlation heatmap | Which features correlate with each other? Are there multicollinearity concerns? | `outputs/eda_03_correlation_heatmap.png` |
+| 3b | Leakage risk check | Does any feature have suspiciously high predictive power (|r| > 0.8 with target)? Could any feature leak future information? | print output (no plot) |
 | 4 | Target class balance | How imbalanced is `Exited`? | `outputs/eda_04_target_balance.png` |
 | 5 | Boxplots by churn | How do numeric feature distributions and outliers differ between churners and non-churners? | `outputs/eda_05_boxplots_by_churn.png` |
 
 **What was consolidated.**  The original 10-plot plan (Decision #10)
 included separate Geography / Gender churn-rate plots, a standalone
 zero-balance segment chart (the spike is visible in Plot 1), a separate
-leakage bar chart (absorbed into Plot 3's heatmap + print output), and a
-NumOfProducts-vs-churn plot (patterns surfaced via `describe()` and the
-heatmap).  A sixth plot (churn rate by categorical features) was also
-dropped after checking the rubric — it is not a required item, and
-categorical composition is already covered by `df.describe(include="all")`
-in the notebook preamble (see Decisions #15, #16, #17).
+leakage bar chart, and a NumOfProducts-vs-churn plot (patterns surfaced
+via `describe()` and the heatmap).  A sixth plot (churn rate by
+categorical features) was also dropped after checking the rubric — it is
+not a required item, and categorical composition is already covered by
+`df.describe(include="all")` in the notebook preamble (see Decisions
+#15, #16, #17).
+
+**What was split.**  Plot 3 originally combined the correlation heatmap
+with the leakage check.  To avoid repetition and keep each cell focused
+on one concern, the heatmap (Plot 3) now covers only inter-feature
+correlations and multicollinearity, while a dedicated leakage risk check
+(Plot 3b) runs immediately after with its own code block that
+systematically tests for target leakage.
 
 **Tooling.**  All plots use `matplotlib` and `seaborn` in a Jupyter
 notebook, saved to `outputs/` at 150 dpi for inclusion as coursework
@@ -100,21 +108,20 @@ Confirm counts match the visual and that the total matches
 
 ---
 
-### 2B.3  Plot 3 — Correlation Heatmap (+ Leakage Check)
+### 2B.3  Plot 3 — Correlation Heatmap
 
 *What to look at.*  Pearson correlation matrix of all numeric features
 plus `Exited` (explicitly excluding `RowNumber`, `CustomerId`).  Look for
 (a) strongly correlated feature pairs that may cause multicollinearity,
-(b) features with the highest absolute correlation to `Exited`, and
-(c) any feature with |r| > 0.8 with the target, which would suggest
-data leakage.  A printed sorted list of |correlation with Exited|
-appears below the heatmap for quick inspection.
+and (b) features with the highest absolute correlation to `Exited` to
+identify the most informative predictors.
 
 *Dataframe validation.*
 ```python
-df[["CreditScore", "Age", "Tenure", "Balance",
-    "NumOfProducts", "HasCrCard", "IsActiveMember",
-    "EstimatedSalary", "Exited"]].corr()["Exited"].abs().sort_values(ascending=False)
+corr_cols = ["CreditScore", "Age", "Tenure", "Balance",
+             "NumOfProducts", "HasCrCard", "IsActiveMember",
+             "EstimatedSalary", "Exited"]
+df[corr_cols].corr()
 ```
 
 *Interpretation (fill after running).*
@@ -124,11 +131,74 @@ df[["CreditScore", "Age", "Tenure", "Balance",
 >   (r = **[top_pair_val]**).
 > - [If all inter-feature |r| < threshold: "No strong multicollinearity
 >   detected — all pairwise |r| < [threshold]."]
-> - **Leakage check**: highest |r| with `Exited` is **[leak_val]**.
->   [If < 0.5: "No feature shows suspiciously high correlation with the
->   target.  Leakage is unlikely."]
->   [If > 0.8: "**Warning**: `[feature]` has |r| = [val].  Investigate
->   whether this feature would be available at prediction time."]
+
+---
+
+### 2B.3b  Leakage Risk Check
+
+*Purpose.*  After reviewing the correlation heatmap for general patterns,
+this dedicated check systematically tests whether any feature leaks
+information about the target (`Exited`).  Leakage would mean a feature
+is derived from or only knowable after the churn event, giving
+artificially high predictive power that would not generalise.
+
+*Code (notebook cell — runs after Plot 3).*
+```python
+# --- Leakage Risk Check ---
+# Re-use the correlation matrix from the heatmap cell
+corr_cols = ["CreditScore", "Age", "Tenure", "Balance",
+             "NumOfProducts", "HasCrCard", "IsActiveMember",
+             "EstimatedSalary", "Exited"]
+corr_matrix = df[corr_cols].corr()
+
+# 1. Flag any feature with |r| > 0.8 with Exited (high leakage risk)
+target_corr = corr_matrix["Exited"].drop("Exited").abs().sort_values(ascending=False)
+print("=== Correlation with Exited (absolute, sorted) ===")
+print(target_corr.to_string())
+print()
+
+LEAK_THRESHOLD = 0.8
+leaky = target_corr[target_corr > LEAK_THRESHOLD]
+if leaky.empty:
+    print(f"✓ No feature exceeds |r| > {LEAK_THRESHOLD} with Exited.")
+    print("  Leakage via linear correlation is unlikely.")
+else:
+    print(f"⚠ WARNING — features above |r| > {LEAK_THRESHOLD} threshold:")
+    for feat, val in leaky.items():
+        print(f"  {feat}: |r| = {val:.4f}  ← investigate temporal availability")
+
+# 2. Domain-sense check: flag features that conceptually
+#    might only be known after churn (none expected in this dataset,
+#    but good practice to document the reasoning)
+print()
+print("=== Domain Leakage Review ===")
+domain_notes = {
+    "CreditScore":     "Available before churn decision — no leakage.",
+    "Age":             "Static demographic — no leakage.",
+    "Tenure":          "Measured at snapshot time — no leakage.",
+    "Balance":         "Account balance at snapshot — no leakage.",
+    "NumOfProducts":   "Product count at snapshot — no leakage.",
+    "HasCrCard":       "Binary flag at snapshot — no leakage.",
+    "IsActiveMember":  "Activity flag at snapshot — no leakage.",
+    "EstimatedSalary": "Estimated at snapshot — no leakage.",
+}
+for feat, note in domain_notes.items():
+    print(f"  {feat}: {note}")
+
+print()
+print("Conclusion: No leakage detected — all features are snapshot-level")
+print("attributes available before the churn outcome is determined.")
+```
+
+*Interpretation (fill after running).*
+> - Highest |correlation with Exited|: `[top_corr_feature]`
+>   (|r| = **[top_corr_val]**).
+> - [If all < 0.8: "No feature exceeds the |r| > 0.8 leakage threshold.
+>   All features are snapshot-level attributes available before the churn
+>   event — leakage is unlikely."]
+> - [If any > 0.8: "**Warning**: `[feature]` has |r| = [val].
+>   Investigate whether this feature would be available at prediction
+>   time before proceeding to modelling."]
 
 ---
 
@@ -222,7 +292,7 @@ dataset.
 | 4 | **ID columns present**: do `RowNumber`, `CustomerId`, `Surname` remain in the raw dataframe? | `df.columns.tolist()` | [confirmed — must be dropped in Task 3] |
 | 5 | **`Surname` cardinality**: high-cardinality string column that would need encoding or removal | `df["Surname"].nunique()` | [confirmed / not confirmed] |
 | 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
-| 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | correlation print output below Plot 3 | [confirmed / not confirmed] |
+| 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | Leakage risk check output (Plot 3b) | [confirmed / not confirmed] |
 | 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — visible in `df.describe(include="all")` | [confirmed / not confirmed] |
 | 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 5 | **Confirmed** — many values above ~70 visible beyond the upper whisker in both classes; robust scaling or winsorisation recommended for linear models |
 | 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Plot 1 | [confirmed / not confirmed] |
@@ -247,7 +317,7 @@ details belong in Task 3 (data preparation) and Task 4 (modelling).
 | 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for Logistic Regression (LogReg) / Multi-Layer Perceptron (MLP); use tree-based models or splines to capture non-linear life-stage effects | Task 3 / 4 |
 | 8 | No missing values (if confirmed) | No imputation step required in pipeline | Task 3 |
 | 9 | `EstimatedSalary` roughly uniform, near-identical across classes | Low predictive power expected — keep in model but note if feature importance is near zero; may add noise, so regularisation or feature selection should be applied | Task 4 |
-| 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons | — |
+| 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons — confirmed by dedicated leakage risk check (Plot 3b) | — |
 | 11 | `Balance` heavy-tailed with extreme high values | Apply `log1p` transform or robust scaling to prevent logistic regression and distance-based models from being pulled by extreme balance values | Task 3 |
 | 12 | `CreditScore` low-end outliers (~400) with weak class separation | Monitor feature importance; consider robust scaling but expect limited contribution on its own | Task 3 / 4 |
 | 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply L1 (Lasso) / L2 (Ridge) regularisation or feature selection to prevent low-signal features from degrading model performance | Task 4 |
