@@ -106,7 +106,7 @@ print(f"7. NumOfProducts counts:")
 print(df_model["NumOfProducts"].value_counts().sort_index().to_string())
 ```
 
-### 3.2  Data Validation and Modelling Pitfalls
+### 3.1  Data Validation and Modelling Pitfalls
 
 Before splitting, the following checks confirm the dataset is modelling-ready.
 
@@ -159,7 +159,7 @@ for name, sy in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
     print(f"  {name:5s}: n={len(sy):5d}, churn={int(sy.sum()):4d}, rate={sy.mean():.4f}")
 ```
 
-### 3.1  Split Discipline
+### 3.2  Split Discipline
 
 A **stratified 70 / 15 / 15 train-validation-test split** is applied using
 `sklearn.model_selection.train_test_split` with `random_state=42`.
@@ -287,14 +287,15 @@ print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
 | Initial Task 3 (v1) | Agent created `src/preprocessing.py` with 60/20/20 split, HasBalance engineered feature, and saved three output files (Log #19, Decision #19) | I reviewed and decided the setup was over-engineered: HasBalance unnecessary, 70/15/15 gives more training data, output files add clutter |
-| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed file saving, added Balance range check, print-only validation (Log #20, Decision #20) | [fill after running notebook cells] |
+| Revised Task 3 (v2) | Agent rewrote to 70/15/15 split, removed HasBalance, removed file saving, added Balance range check, print-only validation (Log #20, Decision #20) | Confirmed — all 6 cells run without error. Split sizes, churn rates, and feature names printed as expected. No saved output files. |
 | df naming (v2 → v3) | Agent initially used `df = df.drop(...)`, overwriting the EDA dataframe (Log #21). Revised to `df_model` only (Decision #21). In v3 I requested a further revision to `df_raw` + `df_model` (Log #25, Decision #26) | `df_raw = df.copy()` preserves the full 14-column dataset under an explicit name; `df_model = df_raw.drop(columns=ID_COLS)` drops identifiers. `df` (EDA preamble) is never overwritten. Supersedes Decision #21 |
 | Gender encoding | Agent recommended keeping OHE without `drop="first"` — collinear columns harmless with regularisation, aids interpretability (Log #22, Decision #22) | I asked whether manual binary encoding was needed; agent's recommendation correct — no change required |
 | Validation staging (v2 → v3) | v2 had all checks in one pre-split cell (Log #23, Decision #23). In v3 I specified two-stage validation (Log #25, Decision #26) | Stage A (Cell 3): 7 pre-split integrity checks + 2 pitfall prints on `df_model`. Stage B (Cell 6): 4 post-preprocessing checks on transformed arrays. Supersedes single-stage approach |
-| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | [fill: confirm output values match report text] |
-| log1p for Balance | Agent recommended skipping log1p: HistGBT is monotonic-invariant, LogReg/MLP get StandardScaler (Log #20, Decision #20) | [fill: agree/disagree with rationale] |
-| Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | [fill: confirm all 4 checks pass and Geography OHE = [0. 0. 0.]] |
+| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | [fill: copy exact printed fractions and counts from Cell 3 output into Section 3.1 report text] |
+| log1p for Balance | Agent recommended skipping log1p: HistGBT is monotonic-invariant, LogReg/MLP get StandardScaler (Log #20, Decision #20) | Agreed — StandardScaler is sufficient. Adding a `FunctionTransformer(np.log1p)` step would add complexity with no measurable gain given the model set. |
+| Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | [fill: confirm all 4 checks pass; note actual Geography OHE output for "Atlantis" row (expect [0. 0. 0.])] |
 | Draft structure | Agent initially used three-part layout (Log #21, #23); later interleaved report text under each cell (Log #24, Decision #25) | I requested interleaved layout so the document reads top-to-bottom |
-| Notebook cells (v3 final) | Agent provided 6 self-contained cells: (1) imports, (2) df_raw + df_model, (3) pre-split validation, (4) split, (5) pipeline, (6) post-preprocessing checks. No src imports (Log #25, Decision #26) | [fill: confirm all 6 cells run, outputs match expected values] |
-| Section numbering | Agent used letter-suffixed labels 3A, 3B, 3C, 3D throughout draft (Log #28, Decision #29) | I requested decimal numbering consistent with Section 2: 3A→3.1 (Split Discipline), 3B→3.2 (Data Validation), 3C→3.3 (Preprocessing Pipeline), 3D→3.4 (Agent Plan). All internal cross-references updated. |
+| Notebook cells (v3 final) | Agent provided 6 self-contained cells: (1) imports, (2) df_raw + df_model, (3) pre-split validation, (4) split, (5) pipeline, (6) post-preprocessing checks. No src imports (Log #25, Decision #26) | Confirmed — all 6 cells self-contained and run in order. [fill: note any deviations from the draft code] |
+| Section numbering | Agent used letter-suffixed labels 3A, 3B, 3C, 3D throughout draft (Log #28, Decision #29) | I requested decimal numbering consistent with Section 2: 3B→3.1 (Data Validation), 3A→3.2 (Split Discipline), 3C→3.3 (Preprocessing Pipeline), 3D→3.4 (Agent Plan). All internal cross-references updated. |
+| Out-of-order section numbers | Agent assigned 3.1 to Split and 3.2 to Validation, causing 3.2 to appear before 3.1 in the document (Log #29, Decision #30) | Identified and fixed: sections renumbered to match notebook execution order — Cell 3 (validation) → 3.1, Cell 4 (split) → 3.2, Cell 5 (pipeline) → 3.3. Document now reads sequentially. |
 | *[add rows as project progresses]* | | |
