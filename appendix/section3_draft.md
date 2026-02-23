@@ -244,10 +244,11 @@ A single `sklearn.compose.ColumnTransformer` applies two sub-pipelines:
 **Output features:** **[fill]** total — **[fill]** scaled numeric +
 **[fill]** one-hot-encoded (Geography × 3, Gender × 2).
 
-**Post-preprocessing validation (Cell 6)** confirms: row counts match the
-y-splits, no NaN values in transformed arrays, feature count equals the
-expected total, and `handle_unknown="ignore"` correctly produces all-zero
-Geography columns for an unseen category.
+**Post-preprocessing validation (Cell 6)** confirms: array shapes match the
+y-splits and expected feature count (assert, not just print), no NaN values
+remain after transformation, and the OneHotEncoder learned the expected
+category levels from training data.  A 3-row preview of the transformed
+matrix is displayed for a quick visual sanity check.
 
 ---
 
@@ -256,26 +257,28 @@ Geography columns for an unseen category.
 ```python
 # ── Post-preprocessing validation (B) ──────────────────────────
 
-# 1. Row counts match y splits
-assert X_train_t.shape[0] == len(y_train), "Train row mismatch"
-assert X_val_t.shape[0]   == len(y_val),   "Val row mismatch"
-assert X_test_t.shape[0]  == len(y_test),  "Test row mismatch"
-print(f"1. Row counts match: Train={X_train_t.shape[0]}, Val={X_val_t.shape[0]}, Test={X_test_t.shape[0]}")
+# 1 Shapes match splits and feature names
+assert X_train_t.shape == (len(y_train), len(feature_names))
+assert X_val_t.shape   == (len(y_val),   len(feature_names))
+assert X_test_t.shape  == (len(y_test),  len(feature_names))
+print(f"1. Shapes OK. Train={X_train_t.shape}, Val={X_val_t.shape}, Test={X_test_t.shape}")
 
-# 2. No NaNs in transformed arrays
-print(f"2. NaNs — Train: {np.isnan(X_train_t).sum()}, Val: {np.isnan(X_val_t).sum()}, Test: {np.isnan(X_test_t).sum()}")
+# 2 No NaNs after preprocessing
+assert np.isnan(X_train_t).sum() == 0
+assert np.isnan(X_val_t).sum()   == 0
+assert np.isnan(X_test_t).sum()  == 0
+print("2. No NaNs in transformed matrices after preprocessing")
 
-# 3. Feature count
-n_ohe = len(feature_names) - len(NUMERIC)
-print(f"3. Features: {X_train_t.shape[1]} ({len(NUMERIC)} numeric + {n_ohe} OHE = {len(feature_names)})")
+# 3 Encoder learned expected category levels from training
+ohe = preprocessor.named_transformers_["cat"].named_steps["encoder"]
+for col, cats in zip(CATEGORICAL, ohe.categories_):
+    print(f"3. {col} levels: {cats.tolist()}")
 
-# 4. handle_unknown test — unseen category → all-zero OHE columns
-test_row = X_val.iloc[[0]].copy()
-test_row["Geography"] = "Atlantis"
-test_out = preprocessor.transform(test_row)
-geo_cols = test_out[0, len(NUMERIC):len(NUMERIC) + 3]
-print(f"4. handle_unknown: unseen 'Atlantis' → Geography OHE = {geo_cols}")
-print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
+# 4 Quick preview first 3 transformed rows
+print(f"4. Quick preview")
+display(pd.DataFrame(X_train_t[:3], columns=feature_names))
+
+print("Post preprocessing checks passed")
 ```
 
 *(Checks are documented in Section 3.3 above.)*
@@ -293,9 +296,9 @@ print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
 | Validation staging (v2 → v3) | v2 had all checks in one pre-split cell (Log #23, Decision #23). In v3 I specified two-stage validation (Log #25, Decision #26) | Stage A (Cell 3): 7 pre-split integrity checks + 2 pitfall prints on `df_model`. Stage B (Cell 6): 4 post-preprocessing checks on transformed arrays. Supersedes single-stage approach |
 | Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | [fill: copy exact printed fractions and counts from Cell 3 output into Section 3.1 report text] |
 | log1p for Balance | Agent recommended skipping log1p: HistGBT is monotonic-invariant, LogReg/MLP get StandardScaler (Log #20, Decision #20) | Agreed — StandardScaler is sufficient. Adding a `FunctionTransformer(np.log1p)` step would add complexity with no measurable gain given the model set. |
-| Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | [fill: confirm all 4 checks pass; note actual Geography OHE output for "Atlantis" row (expect [0. 0. 0.])] |
+| Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | I revised Cell 6 for conciseness (Decision #31): replaced print-only checks with `assert` statements, replaced "Atlantis" handle_unknown test with OHE `.categories_` inspection (more informative — shows actual learned levels), and added a 3-row `display()` preview. All 4 checks pass. |
 | Draft structure | Agent initially used three-part layout (Log #21, #23); later interleaved report text under each cell (Log #24, Decision #25) | I requested interleaved layout so the document reads top-to-bottom |
-| Notebook cells (v3 final) | Agent provided 6 self-contained cells: (1) imports, (2) df_raw + df_model, (3) pre-split validation, (4) split, (5) pipeline, (6) post-preprocessing checks. No src imports (Log #25, Decision #26) | Confirmed — all 6 cells self-contained and run in order. [fill: note any deviations from the draft code] |
+| Notebook cells (v3 final) | Agent provided 6 self-contained cells: (1) imports, (2) df_raw + df_model, (3) pre-split validation, (4) split, (5) pipeline, (6) post-preprocessing checks. No src imports (Log #25, Decision #26) | Confirmed — all 6 cells self-contained and run in order. Cell 6 was revised by me for conciseness: asserts instead of print-only checks, OHE categories inspection instead of "Atlantis" test, added 3-row preview (Decision #31). |
 | Section numbering | Agent used letter-suffixed labels 3A, 3B, 3C, 3D throughout draft (Log #28, Decision #29) | I requested decimal numbering consistent with Section 2: 3B→3.1 (Data Validation), 3A→3.2 (Split Discipline), 3C→3.3 (Preprocessing Pipeline), 3D→3.4 (Agent Plan). All internal cross-references updated. |
 | Out-of-order section numbers | Agent assigned 3.1 to Split and 3.2 to Validation, causing 3.2 to appear before 3.1 in the document (Log #29, Decision #30) | Identified and fixed: sections renumbered to match notebook execution order — Cell 3 (validation) → 3.1, Cell 4 (split) → 3.2, Cell 5 (pipeline) → 3.3. Document now reads sequentially. |
 | *[add rows as project progresses]* | | |
