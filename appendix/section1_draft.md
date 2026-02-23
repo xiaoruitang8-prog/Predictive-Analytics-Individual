@@ -1,6 +1,6 @@
 # 1  Obtain a Dataset and Frame the Predictive Problem
 
-## 1A  Dataset and Problem Framing
+## 1.1  Dataset and Problem Framing
 
 This project uses the **Customer Churn Dataset**
 ([Kaggle source, CC0 licence](https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset/data)),
@@ -30,7 +30,7 @@ sample (`data/sample_customer_churn.csv`) and emits a warning that results
 are **preview only**. If neither file is found, a clear error is raised with
 the Kaggle link and both required paths.
 
-## 1B  Target and Prediction Type
+## 1.2  Target and Prediction Type
 
 | Item | Value |
 |------|-------|
@@ -44,7 +44,7 @@ The business goal is to **predict which customers are most likely to churn**
 so that the bank can intervene with targeted retention offers before
 the customer leaves.
 
-## 1C  Success Metrics and Constraints
+## 1.3  Success Metrics and Constraints
 
 ### Metrics
 
@@ -62,7 +62,7 @@ the customer leaves.
 4. **Runtime.** Training and inference must complete within minutes on a standard laptop, ruling out approaches that require GPU infrastructure.
 5. **Reproducibility.** Fixed random seeds (`42`), pinned dependencies (`requirements.txt`), and a single entry-point script (`src/run_all.py`) must allow anyone to reproduce results end-to-end.
 
-## 1D  Assumptions and Limitations
+## 1.4  Assumptions and Limitations
 
 1. **Cross-sectional snapshot.** The dataset captures customers at a single point in time. We assume this snapshot is representative of the population the model would score in production, but we cannot model temporal dynamics (e.g., trends in churn rate over time).
 2. **No temporal leakage check possible.** Without a date column, we cannot verify that features were recorded *before* the churn event. We proceed on the assumption that all features are legitimately available at prediction time.
@@ -70,10 +70,10 @@ the customer leaves.
 4. **Feature completeness.** The dataset contains only **[n_features]** features. Important predictors available to a real bank — transaction frequency, customer-service call logs, recent product changes — are absent, likely limiting model performance.
 5. **Geographic scope.** Only three countries (France, Germany, Spain) are represented. Results may not generalise to other markets.
 6. **Label reliability.** We treat `Exited` as ground truth. We assume it was recorded accurately and that the definition of "churn" is consistent across all rows.
-7. **No cost matrix available.** We discuss cost asymmetry qualitatively (Section 1C) but do not have actual monetary values for false positives vs. false negatives, so threshold optimisation is illustrative rather than business-calibrated.
+7. **No cost matrix available.** We discuss cost asymmetry qualitatively (Section 1.3) but do not have actual monetary values for false positives vs. false negatives, so threshold optimisation is illustrative rather than business-calibrated.
 8. **Sample size.** At **[N rows]** rows and a **[churn_rate]%** churn rate, the minority class contains approximately **[n_churners]** examples. This is adequate for the models considered but limits the precision of metrics estimated on validation and test splits.
 
-## 1E  Agent Plan vs. My Verification
+## 1.5  Agent Plan vs. My Verification
 
 The table below documents which parts of this section were drafted by the
 AI coding agent and what I personally verified or corrected.
@@ -82,5 +82,5 @@ AI coding agent and what I personally verified or corrected.
 |------|--------------------|-----------------------------|
 | Project scaffolding | Created repo structure, README, `.gitignore`, `requirements.txt` | Reviewed all files; corrected filename inconsistency (`Churn Modelling` → `Churn_Modelling`); required dummy baseline + MLP in model set; required `.xlsx` gitignore |
 | Data access setup | Created `src/data_loader.py` with full → sample fallback and Kaggle link; committed 200-row sample CSV; updated README | Ran sanity-check command; tested full-load, sample-fallback, and missing-file error paths; confirmed full CSV not tracked in git, sample committed |
-| Section 1 draft | Drafted this markdown (1A–1E) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation |
+| Section 1 draft | Drafted this markdown (1.1–1.5) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation |
 | *[add rows as project progresses]* | | |

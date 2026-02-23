@@ -70,7 +70,7 @@ print(f"df_model: {df_model.shape}")
 print(f"Columns:  {list(df_model.columns)}")
 ```
 
-*(No separate report text — column drop is documented in 3C.)*
+*(No separate report text — column drop is documented in 3.3.)*
 
 ---
 
@@ -106,7 +106,7 @@ print(f"7. NumOfProducts counts:")
 print(df_model["NumOfProducts"].value_counts().sort_index().to_string())
 ```
 
-### Report text — 3B  Data Validation and Modelling Pitfalls
+### 3.2  Data Validation and Modelling Pitfalls
 
 Before splitting, the following checks confirm the dataset is modelling-ready.
 
@@ -159,7 +159,7 @@ for name, sy in [("Train", y_train), ("Val", y_val), ("Test", y_test)]:
     print(f"  {name:5s}: n={len(sy):5d}, churn={int(sy.sum()):4d}, rate={sy.mean():.4f}")
 ```
 
-### Report text — 3A  Split Discipline
+### 3.1  Split Discipline
 
 A **stratified 70 / 15 / 15 train-validation-test split** is applied using
 `sklearn.model_selection.train_test_split` with `random_state=42`.
@@ -228,7 +228,7 @@ for fn in feature_names:
 print(f"\nShapes — Train: {X_train_t.shape}  Val: {X_val_t.shape}  Test: {X_test_t.shape}")
 ```
 
-### Report text — 3C  Preprocessing Pipeline
+### 3.3  Preprocessing Pipeline
 
 A single `sklearn.compose.ColumnTransformer` applies two sub-pipelines:
 
@@ -278,11 +278,11 @@ print(f"4. handle_unknown: unseen 'Atlantis' → Geography OHE = {geo_cols}")
 print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
 ```
 
-*(Checks are documented in the 3C report text above.)*
+*(Checks are documented in Section 3.3 above.)*
 
 ---
 
-## 3D  Agent Plan vs. My Verification
+## 3.4  Agent Plan vs. My Verification
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
@@ -296,4 +296,5 @@ print(f"   Expected: [0. 0. 0.] (all-zero for unseen category)")
 | Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | [fill: confirm all 4 checks pass and Geography OHE = [0. 0. 0.]] |
 | Draft structure | Agent initially used three-part layout (Log #21, #23); later interleaved report text under each cell (Log #24, Decision #25) | I requested interleaved layout so the document reads top-to-bottom |
 | Notebook cells (v3 final) | Agent provided 6 self-contained cells: (1) imports, (2) df_raw + df_model, (3) pre-split validation, (4) split, (5) pipeline, (6) post-preprocessing checks. No src imports (Log #25, Decision #26) | [fill: confirm all 6 cells run, outputs match expected values] |
+| Section numbering | Agent used letter-suffixed labels 3A, 3B, 3C, 3D throughout draft (Log #28, Decision #29) | I requested decimal numbering consistent with Section 2: 3A→3.1 (Split Discipline), 3B→3.2 (Data Validation), 3C→3.3 (Preprocessing Pipeline), 3D→3.4 (Agent Plan). All internal cross-references updated. |
 | *[add rows as project progresses]* | | |
