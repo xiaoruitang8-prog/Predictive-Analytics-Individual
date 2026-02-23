@@ -1,67 +1,119 @@
 # 2  Explore the Data to Gain Insights
 
-## 2A  EDA Approach
+Before any modelling or preprocessing, a visual Exploratory Data Analysis
+(EDA) was conducted to understand the dataset's structure, distributions,
+class balance, and potential data-quality issues.  All analysis was
+performed on the **raw 14-column dataframe** (no ID-column drop — that is
+deferred to Task 3, data preparation).  Each plot cell explicitly selects
+the columns it needs so that identifier columns (`RowNumber`, `CustomerId`,
+`Surname`) do not pollute numeric or categorical analyses.
 
-Before any modelling or preprocessing, a visual Exploratory Data Analysis (EDA) was conducted to
-understand the dataset's structure, distributions, class balance, and
-potential data-quality issues.  All analysis was performed on the **raw
-14-column dataframe** (no ID-column drop — that is deferred to Task 3,
-data preparation).  Each plot cell explicitly selects the columns it needs
-so that identifier columns (`RowNumber`, `CustomerId`, `Surname`) do not
-pollute numeric or categorical analyses.
+**Preamble: summary statistics.**  The notebook begins with
+`df.describe(include="all")` to provide a statistical overview of all
+14 columns — numeric ranges, counts, means, and categorical composition
+(top, freq, unique).  This summary table sets context for the six visual
+checks that follow.
 
-**Scope.**  Six plots plus one dedicated leakage check, ordered to match
-the coursework rubric sequence (distributions → missingness →
-correlations → leakage risks → categorical churn rates → class
-imbalance → outliers):
+**Scope.**  Six visual checks ordered to build understanding
+progressively — starting with class balance to set evaluation context,
+then data quality, then feature exploration, ending with leakage as a
+final sanity check:
 
-| # | Plot / Check | Question It Answers | Output File |
-|---|-------------|---------------------|-------------|
-| 1 | Numeric distributions | What do the continuous features look like? Any skew, zero-spikes, or unexpected ranges? | `outputs/eda_01_numeric_distributions.png` |
-| 2 | Missingness check | Are there any null or missing values? | `outputs/eda_02_missingness.png` |
-| 3 | Correlation heatmap | Which features correlate with each other? Are there multicollinearity concerns? | `outputs/eda_03_correlation_heatmap.png` |
-| 3b | Leakage risk check | Does any feature have suspiciously high predictive power (|r| > 0.8 with target)? Could any feature leak future information? | print output (no plot) |
-| 4 | Churn rate by categorical features | How does churn rate differ across Geography, Gender, IsActiveMember, and HasCrCard? | `outputs/eda_04_churn_by_category.png` |
-| 5 | Target class balance | How imbalanced is `Exited`? | `outputs/eda_05_target_balance.png` |
-| 6 | Boxplots by churn | How do numeric feature distributions and outliers differ between churners and non-churners? | `outputs/eda_06_boxplots_by_churn.png` |
+| Section | Check | Why This Order | Output File |
+|---------|-------|----------------|-------------|
+| 2.1 | Class imbalance | Sets context for evaluation metrics and split discipline | `outputs/eda_01_class_balance.png` |
+| 2.2 | Missingness | Tells you if cleaning or imputation is needed before anything else | `outputs/eda_02_missingness.png` |
+| 2.3 | Distributions | Shows skew, zero-inflation, tails for continuous features | `outputs/eda_03_distributions.png` |
+| 2.4 | Categorical churn rates | Gives segment insights and fairness flags | `outputs/eda_04_churn_by_category.png` |
+| 2.5 | Outliers | Highlights extreme values that may affect models | `outputs/eda_05_boxplots_by_churn.png` |
+| 2.6 | Leakage risks | Final sanity check — IDs removed, no suspicious feature | `outputs/eda_06_correlation_heatmap.png` + print |
 
 **What was consolidated.**  The original 10-plot plan (Decision #10)
 included separate Geography / Gender churn-rate plots, a standalone
-zero-balance segment chart (the spike is visible in Plot 1), a separate
+zero-balance segment chart (spike visible in Section 2.3), a separate
 leakage bar chart, and a NumOfProducts-vs-churn plot (patterns surfaced
 via `describe()` and the heatmap).  The categorical churn-rate plot was
 initially dropped after checking the rubric (Decisions #15, #16), but
-later reinstated as a 4-panel bar chart (Plot 4) showing churn rate by
-Geography, Gender, IsActiveMember, and HasCrCard — the visual format
-makes categorical differences immediately clear, whereas
+later reinstated as a 4-panel bar chart in Section 2.4 — the visual
+format makes categorical differences immediately clear, whereas
 `df.describe(include="all")` only shows counts, not churn behaviour
-(see Decision #27).
+(Decision #27).
 
-**What was split.**  Plot 3 originally combined the correlation heatmap
-with the leakage check.  To avoid repetition and keep each cell focused
-on one concern, the heatmap (Plot 3) now covers only inter-feature
-correlations and multicollinearity, while a dedicated leakage risk check
-(Plot 3b) runs immediately after with its own code block that
-systematically tests for target leakage.
+**What was reordered.**  The agent's original ordering followed
+distributions → missingness → correlations → leakage → categories →
+class balance → outliers.  I reorganised to the current flow
+(Decision #28): class imbalance first (sets evaluation context), then
+missingness (cleaning needs), distributions (feature shapes), categorical
+rates (segment insights), outliers (modelling concerns), and leakage last
+(final sanity check).  Numbering changed from letter-based (2A, 2B.1)
+to decimal (2.1, 2.2) for clarity.
 
 **Tooling.**  All plots use `matplotlib` and `seaborn` in a Jupyter
 notebook, saved to `outputs/` at 150 dpi for inclusion as coursework
 evidence.  No `src/` imports are used — each cell is self-contained
-(see Decision Register #12).  The notebook preamble uses
-`df.describe(include="all")` to summarise categorical composition
-(counts, top, freq); Plot 4 then shows how churn *rates* differ across
-those same categories (see Decision #27).
+(see Decision #12).  The notebook preamble uses `df.describe(include="all")`
+to summarise categorical composition (counts, top, freq); Section 2.4
+then shows how churn *rates* differ across those same categories
+(Decision #27).
 
 ---
 
-## 2B  Visual EDA Results
+## 2.1  Class Imbalance
 
-Each subsection below states (i) what to look at in the plot,
-(ii) a simple dataframe check to validate the visual, and
-(iii) an interpretation template with **placeholders** to be filled
-after running the notebook on the full dataset.
+*Why first.*  Knowing the class split up front sets context for every
+subsequent analysis — it determines metric choice (PR-AUC over accuracy),
+split discipline (stratification), and how to read churn-rate plots in
+Section 2.4.
 
-### 2B.1  Plot 1 — Numeric Distributions
+*What to look at.*  Bar heights and percentage labels for class 0
+(retained) vs class 1 (churned).  The split reveals the degree of class
+imbalance, which directly affects metric choice and sampling strategy.
+
+*Dataframe validation.*
+```python
+df["Exited"].value_counts(normalize=True)
+```
+Confirm the percentages on the bars match the output of the command above.
+
+*Interpretation (fill after running).*
+> The dataset contains **[N_rows]** customers.  **[retained_pct]%** are
+> retained (`Exited = 0`) and **[churn_pct]%** churned (`Exited = 1`).
+> This confirms a moderately imbalanced dataset, justifying the use of
+> Precision–Recall Area Under the Curve (PR-AUC) as the primary metric
+> (Section 1.3).
+
+---
+
+## 2.2  Missingness
+
+*Why here.*  Before examining distributions, we need to know whether the
+data is complete — missing values would affect every downstream plot and
+model.
+
+*What to look at.*  A horizontal bar chart showing null counts per column.
+Any column with non-zero missing values needs a handling strategy before
+modelling.
+
+*Dataframe validation.*
+```python
+df.isnull().sum()
+```
+Confirm counts match the visual and that the total matches
+`df.isnull().sum().sum()`.
+
+*Interpretation (fill after running).*
+> **[n_missing_total]** missing values were found across all columns.
+> [If zero: "The dataset is complete — no imputation is required."
+> If non-zero: "Column(s) **[col_names]** have **[n_missing]** missing
+> values (**[pct_missing]%**).  Handling strategy: [drop / impute]."]
+
+---
+
+## 2.3  Distributions
+
+*Why here.*  With class balance and completeness established, we now
+examine the shape of each continuous feature — skew, zero-inflation, and
+tails inform preprocessing choices (scaling strategy, outlier handling).
 
 *What to look at.*  Histograms for each continuous feature:
 `CreditScore`, `Age`, `Tenure`, `Balance`, `EstimatedSalary`.
@@ -90,125 +142,11 @@ Confirm min/max/mean align with what the histograms show.
 
 ---
 
-### 2B.2  Plot 2 — Missingness Check
+## 2.4  Categorical Churn Rates
 
-*What to look at.*  A horizontal bar chart showing null counts per column.
-Any column with non-zero missing values needs a handling strategy before
-modelling.
-
-*Dataframe validation.*
-```python
-df.isnull().sum()
-```
-Confirm counts match the visual and that the total matches
-`df.isnull().sum().sum()`.
-
-*Interpretation (fill after running).*
-> **[n_missing_total]** missing values were found across all columns.
-> [If zero: "The dataset is complete — no imputation is required."
-> If non-zero: "Column(s) **[col_names]** have **[n_missing]** missing
-> values (**[pct_missing]%**).  Handling strategy: [drop / impute]."]
-
----
-
-### 2B.3  Plot 3 — Correlation Heatmap
-
-*What to look at.*  Pearson correlation matrix of all numeric features
-plus `Exited` (explicitly excluding `RowNumber`, `CustomerId`).  Look for
-(a) strongly correlated feature pairs that may cause multicollinearity,
-and (b) features with the highest absolute correlation to `Exited` to
-identify the most informative predictors.
-
-*Code (notebook cell).*
-```python
-# Select only the numeric feature columns plus the target column,
-# then compute the Pearson correlation matrix (values between -1 and 1).
-corr = df[NUMERIC + [TARGET]].corr()
-# Create a figure and axis for the heatmap.
-# figsize controls the width and height of the plot in inches.
-fig, ax = plt.subplots(figsize=(8, 6))
-# Display the correlation matrix as an image (heatmap).
-# cmap sets the colour scheme, and vmin/vmax fix the scale so -1 and 1 are consistent.
-im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
-# Set tick positions on both axes (one tick per column/row in the correlation matrix).
-ax.set_xticks(range(len(corr)))
-ax.set_yticks(range(len(corr)))
-# Label the ticks with the column names.
-# Rotate x labels so they do not overlap.
-ax.set_xticklabels(corr.columns, rotation=45, ha="right")
-ax.set_yticklabels(corr.columns)
-# Add the correlation value as text inside each heatmap cell.
-# corr.iloc[i, j] accesses the correlation at row i, column j.
-for i in range(len(corr)):
-    for j in range(len(corr)):
-        ax.text(
-            j, i, f"{corr.iloc[i, j]:.2f}",  # show correlation to 2 decimals
-            ha="center", va="center",         # centre text in the cell
-            fontsize=8
-        )
-# Add a colorbar to explain the mapping between colours and correlation values.
-fig.colorbar(im, ax=ax, shrink=0.8)
-# Add a title to describe the plot.
-ax.set_title("Plot 3 Correlation Heatmap Numeric plus Target")
-# Adjust layout so labels and title fit nicely.
-fig.tight_layout()
-# Save the plot image into the outputs folder for evidence or reporting.
-fig.savefig("outputs/eda_03_correlation_heatmap.png", dpi=150)
-# Display the heatmap in the notebook.
-plt.show()
-```
-
-*Interpretation (fill after running).*
-> - Strongest feature–target correlation: `[top_corr_feature]`
->   (r = **[top_corr_val]**).
-> - Strongest inter-feature correlation: `[top_pair_a]` – `[top_pair_b]`
->   (r = **[top_pair_val]**).
-> - [If all inter-feature |r| < threshold: "No strong multicollinearity
->   detected — all pairwise |r| < [threshold]."]
-
----
-
-### 2B.3b  Leakage Risk Check
-
-*Purpose.*  After reviewing the correlation heatmap for general patterns,
-this dedicated check systematically tests whether any feature leaks
-information about the target (`Exited`).  Leakage would mean a feature
-is derived from or only knowable after the churn event, giving
-artificially high predictive power that would not generalise.  This cell
-re-uses the `corr` matrix computed in the heatmap cell above.
-
-*Code (notebook cell — runs after Plot 3).*
-```python
-# --- Leakage Risk Check ---
-# Extract absolute correlations with the target, excluding the target itself.
-# corr was computed in the heatmap cell: corr = df[NUMERIC + [TARGET]].corr()
-corr_with_target = corr[TARGET].drop(TARGET).abs().sort_values(ascending=False)
-
-# Flag any feature that is suspiciously correlated with the target
-# (rule of thumb: |r| > 0.8 suggests possible leakage).
-threshold = 0.8
-suspects = corr_with_target[corr_with_target > threshold]
-print("Absolute correlation with target:")
-print(corr_with_target.round(3))
-print()
-if suspects.empty:
-    print("No correlation based leakage flagged (no feature has |r| > 0.8).")
-else:
-    print("Potential leakage features (|r| > 0.8):", list(suspects.index))
-```
-
-*Interpretation (fill after running).*
-> - Highest |correlation with Exited|: `[top_corr_feature]`
->   (|r| = **[top_corr_val]**).
-> - [If all < 0.8: "No feature exceeds the |r| > 0.8 leakage threshold.
->   Leakage via linear correlation is unlikely."]
-> - [If any > 0.8: "**Warning**: `[feature]` has |r| = [val].
->   Investigate whether this feature would be available at prediction
->   time before proceeding to modelling."]
-
----
-
-### 2B.4  Plot 4 — Churn Rate by Categorical Features
+*Why here.*  After understanding numeric feature shapes, we examine how
+churn *behaviour* differs across categorical features — providing segment
+insights and flagging potential fairness concerns (Geography, Gender).
 
 *What to look at.*  Four side-by-side bar charts showing churn rate (%)
 for each level of `Geography`, `Gender`, `IsActiveMember`, and
@@ -253,33 +191,17 @@ plt.show()
 
 ---
 
-### 2B.5  Plot 5 — Target Class Balance
+## 2.5  Outliers
 
-*What to look at.*  Bar heights and percentage labels for class 0
-(retained) vs class 1 (churned).  The split reveals the degree of class
-imbalance, which directly affects metric choice and sampling strategy.
-
-*Dataframe validation.*
-```python
-df["Exited"].value_counts(normalize=True)
-```
-Confirm the percentages on the bars match the output of the command above.
-
-*Interpretation (fill after running).*
-> The dataset contains **[N_rows]** customers.  **[retained_pct]%** are
-> retained (`Exited = 0`) and **[churn_pct]%** churned (`Exited = 1`).
-> This confirms a moderately imbalanced dataset, justifying the use of
-> Precision–Recall Area Under the Curve (PR-AUC) as the primary metric (Section 1C).
-
----
-
-### 2B.6  Plot 6 — Boxplots by Churn
+*Why here.*  With distributions and categorical patterns understood, we
+now look for extreme values that may affect model performance, and examine
+how feature distributions shift between churners and non-churners.
 
 *What to look at.*  Side-by-side boxplots of each continuous feature split
-by `Exited` (0 vs 1).  Look for distributional shifts: features where
-the median, interquartile range (IQR), or outlier pattern differs between churners and
-non-churners are likely informative predictors.  Outlier dots beyond
-the whiskers flag extreme values.
+by `Exited` (0 vs 1).  Look for distributional shifts: features where the
+median, IQR, or outlier pattern differs between churners and non-churners
+are likely informative predictors.  Outlier dots beyond the whiskers flag
+extreme values.
 
 *Dataframe validation.*
 ```python
@@ -289,35 +211,34 @@ df.groupby("Exited")[["CreditScore", "Age", "Tenure", "Balance",
 
 *Interpretation.*
 
-> **Age — clearest separation.**  The churned group has a noticeably higher
-> median age and a higher interquartile range than the retained group,
-> confirming that churn risk increases with age.  Many data points sit above
-> the upper whisker in both groups (especially retained), indicating a long
-> upper tail with genuine outliers (ages above ~70).  The distributional
-> shift suggests churn may change across life stages — tree-based models or
-> splines will capture this non-linearity better than a purely linear term.
+> **Age — clearest separation.**  The churned group has a noticeably
+> higher median age and IQR than the retained group, confirming that churn
+> risk increases with age.  Many data points sit above the upper whisker in
+> both groups, indicating a long upper tail with genuine outliers (ages
+> above ~70).  The distributional shift suggests churn may change across
+> life stages — tree-based models will capture this non-linearity better
+> than a purely linear term.
 >
 > **Balance — wide spread, zero-inflated.**  Both groups show a very wide
-> IQR, with the churned group sitting slightly higher overall.  Extreme high
-> values appear above the whiskers, confirming that Balance is heavy-tailed.
-> Critically, a large cluster of zero-balance customers is visible as
-> outlier dots near 0, creating a bimodal distribution (the zero-spike is
-> also visible in Plot 1).  This zero-inflated pattern is a modelling
-> pitfall that may warrant special treatment (see Section 2D, action #3).
+> IQR, with the churned group sitting slightly higher overall.  Extreme
+> high values appear above the whiskers, confirming that Balance is
+> heavy-tailed.  A large cluster of zero-balance customers is visible as
+> outlier dots near 0, creating a bimodal distribution (also visible in
+> Section 2.3).  This zero-inflated pattern may warrant special treatment
+> (see Section 2.7, action #3).
 >
 > **CreditScore — weak discriminator.**  Distributions overlap
 > substantially between churned and retained customers, indicating limited
 > discriminatory power on its own.  A small number of unusually low scores
-> (~400 and below) appear as outlier dots, but the medians and IQRs are
-> nearly identical across both classes.
+> (~400) appear as outlier dots, but medians and IQRs are nearly identical
+> across both classes.
 >
-> **EstimatedSalary — near-identical distributions.**  The boxplots are
+> **EstimatedSalary — near-identical distributions.**  Boxplots are
 > virtually indistinguishable between churned and retained customers,
-> confirming that EstimatedSalary is unlikely to be a strong predictor of
-> churn.  The spread is wide but roughly uniform with minimal outlier
-> behaviour compared to Balance.
+> confirming that EstimatedSalary is unlikely to be a strong predictor.
+> The spread is wide but roughly uniform with minimal outlier behaviour.
 >
-> **Summary of outliers identified in this plot:**
+> **Outlier severity summary:**
 >
 > | Feature | Outlier Pattern | Severity |
 > |---------|----------------|----------|
@@ -328,33 +249,108 @@ df.groupby("Exited")[["CreditScore", "Age", "Tenure", "Balance",
 
 ---
 
-## 2C  Data-Quality Issues and Modelling Pitfalls
+## 2.6  Leakage Risks
 
-The following are framed as **checks to perform**, not claims.  Each item
-must be confirmed or ruled out by running the notebook on the full
-dataset.
+*Why last.*  This is a final sanity check before proceeding to modelling.
+After understanding distributions and patterns, we verify that no feature
+leaks information about the target and that identifier columns are excluded.
 
-| # | Check | How to Verify | Status |
-|---|-------|--------------|--------|
-| 1 | **Class imbalance**: is the positive class (churners) a minority? | `df["Exited"].value_counts(normalize=True)` — see Plot 5 | [confirmed / not confirmed] |
-| 2 | **Missing values**: are there any nulls? | `df.isnull().sum().sum()` — see Plot 2 | [confirmed / not confirmed] |
-| 3 | **Zero-balance spike**: does `Balance` have a large mass at zero? | `(df["Balance"] == 0).mean()` — visible in Plot 1 | [confirmed / not confirmed] |
-| 4 | **ID columns present**: do `RowNumber`, `CustomerId`, `Surname` remain in the raw dataframe? | `df.columns.tolist()` | [confirmed — must be dropped in Task 3] |
-| 5 | **`Surname` cardinality**: high-cardinality string column that would need encoding or removal | `df["Surname"].nunique()` | [confirmed / not confirmed] |
-| 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
-| 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | Leakage risk check output (Plot 3b) | [confirmed / not confirmed] |
-| 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — visible in `df.describe(include="all")` and Plot 4 | [confirmed / not confirmed] |
-| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Plot 6 | **Confirmed** — many values above ~70 visible beyond the upper whisker in both classes; robust scaling or winsorisation recommended for linear models |
-| 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Plot 1 | [confirmed / not confirmed] |
-| 11 | **Tenure range**: is 0 a valid value or does it indicate missing data? | `df["Tenure"].value_counts().sort_index()` | [confirmed / not confirmed] |
-| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Plot 1; boxplots nearly identical across classes in Plot 6 | **Confirmed** — roughly uniform with near-identical churned/retained distributions; low predictive power expected |
+Two notebook cells:
+1. **Correlation heatmap** — visual overview of inter-feature correlations
+   and feature–target relationships.
+2. **Leakage threshold check** — systematic test for |r| > 0.8 with `Exited`.
+
+### Correlation Heatmap
+
+*What to look at.*  Pearson correlation matrix of all numeric features
+plus `Exited` (excluding `RowNumber`, `CustomerId`).  Look for
+(a) strongly correlated feature pairs (multicollinearity risk), and
+(b) features with the highest absolute correlation to `Exited`.
+
+*Code (notebook cell).*
+```python
+corr = df[NUMERIC + [TARGET]].corr()
+fig, ax = plt.subplots(figsize=(8, 6))
+im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
+ax.set_xticks(range(len(corr)))
+ax.set_yticks(range(len(corr)))
+ax.set_xticklabels(corr.columns, rotation=45, ha="right")
+ax.set_yticklabels(corr.columns)
+for i in range(len(corr)):
+    for j in range(len(corr)):
+        ax.text(j, i, f"{corr.iloc[i, j]:.2f}",
+                ha="center", va="center", fontsize=8)
+fig.colorbar(im, ax=ax, shrink=0.8)
+ax.set_title("Plot 3 Correlation Heatmap Numeric plus Target")
+fig.tight_layout()
+fig.savefig("outputs/eda_06_correlation_heatmap.png", dpi=150)
+plt.show()
+```
+
+*Interpretation (fill after running).*
+> - Strongest feature–target correlation: `[top_corr_feature]`
+>   (r = **[top_corr_val]**).
+> - Strongest inter-feature correlation: `[top_pair_a]` – `[top_pair_b]`
+>   (r = **[top_pair_val]**).
+> - [If all inter-feature |r| < threshold: "No strong multicollinearity
+>   detected — all pairwise |r| < [threshold]."]
+
+### Leakage Threshold Check
+
+*Purpose.*  Systematically tests whether any feature has suspiciously high
+correlation with the target — which would indicate data leakage.
+
+*Code (notebook cell — runs after heatmap).*
+```python
+corr_with_target = corr[TARGET].drop(TARGET).abs().sort_values(ascending=False)
+threshold = 0.8
+suspects = corr_with_target[corr_with_target > threshold]
+print("Absolute correlation with target:")
+print(corr_with_target.round(3))
+print()
+if suspects.empty:
+    print("No correlation based leakage flagged (no feature has |r| > 0.8).")
+else:
+    print("Potential leakage features (|r| > 0.8):", list(suspects.index))
+```
+
+*Interpretation (fill after running).*
+> - Highest |correlation with Exited|: `[top_corr_feature]`
+>   (|r| = **[top_corr_val]**).
+> - [If all < 0.8: "No feature exceeds the |r| > 0.8 leakage threshold.
+>   Leakage via linear correlation is unlikely."]
+> - [If any > 0.8: "**Warning**: `[feature]` has |r| = [val].
+>   Investigate whether this feature would be available at prediction
+>   time before proceeding to modelling."]
 
 ---
 
-## 2D  Actions Taken or Planned
+## 2.7  Data-Quality Issues and Actions
 
-These are high-level actions arising from EDA findings.  Implementation
-details belong in Task 3 (data preparation) and Task 4 (modelling).
+### Checks
+
+The following are framed as **checks to perform**, not claims.  Each item
+must be confirmed or ruled out by running the notebook on the full dataset.
+
+| # | Check | How to Verify | Status |
+|---|-------|--------------|--------|
+| 1 | **Class imbalance**: is the positive class (churners) a minority? | `df["Exited"].value_counts(normalize=True)` — see Section 2.1 | [confirmed / not confirmed] |
+| 2 | **Missing values**: are there any nulls? | `df.isnull().sum().sum()` — see Section 2.2 | [confirmed / not confirmed] |
+| 3 | **Zero-balance spike**: does `Balance` have a large mass at zero? | `(df["Balance"] == 0).mean()` — visible in Section 2.3 | [confirmed / not confirmed] |
+| 4 | **ID columns present**: do `RowNumber`, `CustomerId`, `Surname` remain in the raw dataframe? | `df.columns.tolist()` | [confirmed — must be dropped in Task 3] |
+| 5 | **`Surname` cardinality**: high-cardinality string column that would need encoding or removal | `df["Surname"].nunique()` | [confirmed / not confirmed] |
+| 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
+| 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | Leakage threshold check — see Section 2.6 | [confirmed / not confirmed] |
+| 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — visible in `df.describe(include="all")` and Section 2.4 | [confirmed / not confirmed] |
+| 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Section 2.5 | **Confirmed** — many values above ~70 visible beyond the upper whisker; robust scaling or winsorisation recommended for linear models |
+| 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Section 2.3 | [confirmed / not confirmed] |
+| 11 | **Tenure range**: is 0 a valid value or does it indicate missing data? | `df["Tenure"].value_counts().sort_index()` | [confirmed / not confirmed] |
+| 12 | **EstimatedSalary distribution**: is it approximately uniform (synthetic data artefact)? | histogram shape in Section 2.3; boxplots nearly identical across classes in Section 2.5 | **Confirmed** — roughly uniform with near-identical churned/retained distributions; low predictive power expected |
+
+### Actions
+
+High-level actions arising from EDA findings.  Implementation details
+belong in Task 3 (data preparation) and Task 4 (modelling).
 
 | # | Issue Identified | Action | When |
 |---|-----------------|--------|------|
@@ -362,20 +358,20 @@ details belong in Task 3 (data preparation) and Task 4 (modelling).
 | 2 | ID columns (`RowNumber`, `CustomerId`, `Surname`) carry no predictive signal | Drop before modelling | Task 3 |
 | 3 | Zero-balance spike in `Balance` | Consider adding a binary `HasBalance` indicator feature | Task 3 |
 | 4 | `NumOfProducts` rare categories (3, 4) with very few rows | Monitor for instability in cross-validation; consider grouping 3+ into one bin | Task 3 |
-| 5 | Geography has different churn rates (see Plot 4) | Ensure one-hot or ordinal encoding preserves this signal | Task 3 |
-| 6 | `Gender` churn-rate gap (see Plot 4) | Include `Gender` as a feature; monitor fairness metrics post-modelling | Task 4 |
-| 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for Logistic Regression (LogReg) / Multi-Layer Perceptron (MLP); use tree-based models or splines to capture non-linear life-stage effects | Task 3 / 4 |
+| 5 | Geography has different churn rates (see Section 2.4) | Ensure one-hot encoding preserves this signal | Task 3 |
+| 6 | `Gender` churn-rate gap (see Section 2.4) | Include `Gender` as a feature; monitor fairness metrics post-modelling | Task 4 |
+| 7 | `Age` distributional shift between classes + upper-tail outliers | Likely the strongest single predictor; apply robust scaling or winsorisation for LogReg / MLP; tree-based models handle non-linearity naturally | Task 3 / 4 |
 | 8 | No missing values (if confirmed) | No imputation step required in pipeline | Task 3 |
-| 9 | `EstimatedSalary` roughly uniform, near-identical across classes | Low predictive power expected — keep in model but note if feature importance is near zero; may add noise, so regularisation or feature selection should be applied | Task 4 |
-| 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons — confirmed by dedicated leakage risk check (Plot 3b) | — |
-| 11 | `Balance` heavy-tailed with extreme high values | Apply `log1p` transform or robust scaling to prevent logistic regression and distance-based models from being pulled by extreme balance values | Task 3 |
+| 9 | `EstimatedSalary` roughly uniform, near-identical across classes | Low predictive power expected — keep in model but note if feature importance is near zero | Task 4 |
+| 10 | No leakage detected (if confirmed) | No features to remove for leakage reasons — confirmed by Section 2.6 | — |
+| 11 | `Balance` heavy-tailed with extreme high values | Apply `log1p` transform or robust scaling to prevent linear/distance-based models from being pulled by extreme values | Task 3 |
 | 12 | `CreditScore` low-end outliers (~400) with weak class separation | Monitor feature importance; consider robust scaling but expect limited contribution on its own | Task 3 / 4 |
-| 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply L1 (Lasso) / L2 (Ridge) regularisation or feature selection to prevent low-signal features from degrading model performance | Task 4 |
-| 14 | `IsActiveMember` and `HasCrCard` churn-rate differences (see Plot 4) | Include both as features; `IsActiveMember` shows ~2× churn-rate gap, strong binary predictor | Task 3 |
+| 13 | Overlapping features (`CreditScore`, `EstimatedSalary`) may add noise | Apply L1 / L2 regularisation or feature selection to prevent low-signal features from degrading performance | Task 4 |
+| 14 | `IsActiveMember` and `HasCrCard` churn-rate differences (see Section 2.4) | Include both as features; `IsActiveMember` shows ~2× churn-rate gap — strong binary predictor | Task 3 |
 
 ---
 
-## 2E  Agent Plan vs. My Verification
+## 2.8  Agent Plan vs. My Verification
 
 The table below documents which parts of this EDA were drafted by the
 AI coding agent and what I personally verified or corrected by running
@@ -383,12 +379,13 @@ the notebook and cross-checking against the raw data.
 
 | Step | What the Agent Did | What I Verified / Corrected |
 |------|--------------------|-----------------------------|
-| EDA plan and plot list | Agent initially proposed 10-plot scope (Log #9, Decision #10). After user review, consolidated to 6 plots in rubric order (Log #15, Decision #15). Subsequently dropped "Churn rate by categorical features" plot after checking rubric requirements, reducing to 5-plot scope (Log #16, Decision #16). Later suggested a printed table as a minimal alternative for categorical churn rates | I identified the 10-plot plan was over-engineered; requested consolidation to rubric order. Later checked the rubric and confirmed churn-rate-by-category is not a required item, so dropped it. Subsequently decided a bar-chart plot is more effective than a printed table — reinstated as Plot 4 (4-panel bar chart for Geography, Gender, IsActiveMember, HasCrCard), restoring the EDA to 6 plots plus 1 leakage check (Decision #27). Verified final 6 plots cover all rubric areas: distributions, missingness, leakage risks, class imbalance, outliers, plus categorical churn behaviour |
-| Notebook preamble | Agent drafted preamble with `src` imports, ID-column drop, and `df.describe(include="all")` (Log #9, #10) | I caught two agent errors: (1) `from src import …` would fail because notebook runs outside repo root — rewrote as standalone code (Log #11, Decision #12); (2) ID-column drop belongs in Task 3, not the EDA preamble — deferred it (Log #10, Decision #11). Initially reverted `include="all"` to plain `df.describe()` (Log #13), but later reinstated `include="all"` because categorical features need composition context for Plot 4's churn-rate analysis (Log #17, Decision #17) |
-| Plot code (all 6 plots) | Agent provided code snippets for all plots (Log #9, #15). Also identified `labels=` → `tick_labels=` matplotlib deprecation fix for boxplot code (Log #16) | I rewrote Plot 1 entirely as standalone code with inline constants, percentage labels, and human-readable tick labels (Log #11, Decision #12). Wrote Plot 4 (categorical churn rates) myself as a 4-panel bar chart (Decision #27). Ran each cell, verified outputs against dataframe checks listed in Section 2B, and applied the boxplot deprecation fix |
-| Section 2 draft (this document) | Agent drafted 2A–2E with placeholders (Log #12, Decision #13). Agent included `NumOfProducts` in Plot 3 section but the actual histogram does not show it (Log #14, Decision #14). Full draft rewritten during consolidation from 10 to 6 plots (Log #15, Decision #15), then updated again when Plot 5 was dropped (Log #16, Decision #16) | I caught the `NumOfProducts` error in Plot 3 — the draft claimed a finding the plot cannot support, so I removed it (Decision #14). Filled all `[placeholders]` after running the full notebook; cross-checked every percentage and count against `value_counts()`, `groupby().mean()`, and `.corr()` outputs |
-| Data-quality checks (2C) | Agent listed 12 checks framed as hypotheses with status column for auditable tracking (Log #12, Decision #13) | I confirmed or ruled out each check by running the validation commands in the notebook on the full dataset. Each status cell updated with result and evidence |
-| Boxplot findings integration (2B.6, 2C, 2D) | Agent integrated two sets of boxplot analysis notes into a unified interpretation for Plot 6: per-feature paragraphs (Age, Balance, CreditScore, EstimatedSalary), an outlier severity table, confirmed data-quality checks #9 and #12 in Section 2C, and added three new action items (#11–#13) to Section 2D covering Balance heavy-tail treatment, CreditScore outlier monitoring, and L1/L2 regularisation for overlapping features | I provided the raw boxplot observations (distributional shifts, outlier patterns, zero-balance cluster, modelling pitfalls); I reviewed the agent's merged write-up against my notes and the actual Plot 6 output to verify accuracy of claims and severity ratings |
-| Correlation heatmap / leakage split (2B.3, 2B.3b) | Agent drafted Plot 3 as "Correlation Heatmap (+ Leakage Check)" with a single combined section containing both heatmap code and a leakage risk check with domain-sense review (Log #18, Decision #18). Agent's leakage code included a domain-notes dictionary and formatted output with unicode checkmarks | I identified the repetition: the combined section was doing two things (insight heatmap + leakage testing) in one block. I split them into Plot 3 (heatmap only) and Plot 3b (leakage check only). I wrote both notebook cells myself — the heatmap uses `ax.imshow` with annotated correlation values, and the leakage check re-uses the `corr` matrix to flag features with |r| > 0.8. Agent's domain-sense dictionary was dropped in favour of a simpler threshold-based check matching my notebook style |
-| Categorical churn rate plot (2B.4) | Agent initially proposed churn-rate-by-category as one of 10 EDA plots (Log #9, Decision #10). After consolidation, it was merged into a 6-plot plan (Decision #15), then dropped entirely after rubric review — not a required item (Decision #16). Agent later suggested a printed table as a minimal alternative (Log #26) | I decided a bar-chart plot is more effective than a printed table for showing categorical churn-rate differences — the visual format makes category-level gaps immediately obvious. Wrote the 4-panel bar chart code myself (Geography, Gender, IsActiveMember, HasCrCard). Reinstated as Plot 4, restoring the EDA to 6 plots plus 1 leakage check. `df.describe(include="all")` shows counts but not churn behaviour — this plot fills that gap (Decision #27) |
+| EDA plan and plot list | Agent initially proposed 10-plot scope (Log #9, Decision #10). Consolidated to 6 plots in rubric order (Log #15, Decision #15). Subsequently dropped "Churn rate by categorical features" after checking rubric — not a required item — reducing to 5-plot scope (Log #16, Decision #16). Later suggested a printed table as a minimal alternative | I identified the 10-plot plan was over-engineered; requested consolidation. Decided a bar-chart plot is more effective than a printed table — reinstated as Section 2.4 (4-panel bar chart), restoring the EDA to 6 checks (Decision #27). Verified final 6 checks cover all rubric areas: distributions, missingness, leakage risks, class imbalance, outliers, plus categorical churn behaviour |
+| Notebook preamble | Agent drafted preamble with `src` imports, ID-column drop, and `df.describe(include="all")` (Log #9, #10) | Caught two errors: (1) `from src import …` fails outside repo root — rewrote as standalone code (Decision #12); (2) ID-column drop belongs in Task 3, not the EDA preamble (Decision #11). Initially reverted `include="all"` to plain `df.describe()` (Log #13), but reinstated `include="all"` because it is the only place categorical composition is summarised, complementing Section 2.4 (Decision #17) |
+| Plot code | Agent provided code snippets for all plots (Log #9, #15). Identified `labels=` → `tick_labels=` matplotlib deprecation fix for boxplot code (Log #16) | Rewrote the class balance plot entirely as standalone code with inline constants and percentage labels (Decision #12). Wrote the categorical churn rates plot (Section 2.4) myself as a 4-panel bar chart (Decision #27). Ran each cell and verified outputs against dataframe checks |
+| Section 2 draft structure | Agent drafted original with letter-based numbering (2A, 2B.1, 2B.2 etc.) and a different ordering: distributions → missingness → correlations → leakage → categories → class balance → outliers (Log #12, Decision #13). Redrafted multiple times as scope changed (Logs #15, #16, #26) | Caught the `NumOfProducts` error — draft claimed a finding the distributions plot cannot support (Decision #14). Filled all `[placeholders]` after running the full notebook |
+| Data-quality checks (Section 2.7) | Agent listed 12 checks framed as hypotheses with a status column for auditable tracking (Log #12, Decision #13) | Confirmed or ruled out each check by running the validation commands on the full dataset. Updated each status cell with result and evidence |
+| Outlier analysis (Section 2.5) | Agent integrated boxplot observations into unified per-feature paragraphs and an outlier severity table. Added three new actions (#11–#13) to Section 2.7 covering Balance heavy-tail, CreditScore monitoring, and L1/L2 regularisation | I provided the raw boxplot observations; reviewed the agent's merged write-up against my notes and the actual plot output to verify accuracy of claims and severity ratings |
+| Leakage section (Section 2.6) | Agent drafted heatmap and leakage check as a single combined section, then split them but added an over-engineered domain-sense dictionary (Log #18, Decision #18) | I identified the repetition and split them into two focused cells. I wrote both notebook cells myself — heatmap uses `ax.imshow` with annotated correlation values; leakage check re-uses `corr` and flags |r| > 0.8. Dropped agent's domain-sense dictionary in favour of simpler threshold-based check |
+| Categorical churn rate plot (Section 2.4) | Agent proposed this in the 10-plot plan, then dropped it after rubric review (Decision #16). Later suggested a printed table as a minimal alternative (Log #26) | I decided a bar-chart plot is clearer than a printed table — the visual format makes category-level churn-rate gaps immediately obvious. Wrote the 4-panel code myself (Decision #27) |
+| **EDA ordering and numbering** | **Agent used letter-based numbering (2A, 2B.1 etc.) and a different section order through all drafts** (Logs #12, #15, #16, #26) | **I reorganised to a more logical analytical flow** (Decision #28): class imbalance first (sets evaluation context) → missingness (cleaning needs) → distributions (feature shapes) → categorical rates (segment insights) → outliers (modelling concerns) → leakage (final sanity check). Changed numbering from letter-based (2A, 2B.1) to decimal (2.1, 2.2). Merged old data-quality checks and actions into single Section 2.7 |
 | *[add rows as project progresses]* | | |
