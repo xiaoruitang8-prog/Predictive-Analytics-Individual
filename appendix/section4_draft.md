@@ -298,15 +298,18 @@ vs interpretability).*
 
 ---
 
-## Agent Plan vs My Verification
+## 4.6  My Agent vs My Verification
 
-| Step | What the Agent Did | What I Verified or Corrected |
+| Step | What My Agent Did | What I Verified or Corrected |
 |------|--------------------|------------------------------|
+| Metric set | Agent initially proposed 3 metrics (PR-AUC, ROC-AUC, Recall@top-20%). I requested adding Precision@top-20% as a fourth metric to measure campaign cost-efficiency | I confirmed that Precision@top-20% is mechanically linked to Recall@top-20% under a fixed-bucket rule but tells a different business story (wasted interventions vs churner coverage). Updated Section 1.3 accordingly |
 | Evaluation function | Defined `evaluate()` with 4 metrics and `recall_precision_top()` helper; uses `predict_proba` not `predict`; test set never passed in Task 4 | [fill: confirm Cell 1 runs without error; check dict keys match column names in the comparison table] |
 | Baseline (Dummy) | `DummyClassifier(most_frequent)` fitted and evaluated; sets PR-AUC floor | [fill: confirm PR-AUC ≈ 0.20 and ROC-AUC ≈ 0.50 — if not, something is wrong] |
 | Class-weight ablation | LogReg `default` vs `balanced` — only `class_weight` differs; winner printed automatically | [fill: which variant wins? By how much? Does balanced help as expected?] |
+| Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). I confirmed this matches the plan: Dummy → LogReg ablation → RF + HistGBT. No MLP — the plan focuses on tree/linear models | [fill: confirm all 4 models fit without error; all PR-AUCs above Dummy floor] |
 | RandomForest | `balanced_subsample`, 200 trees, default depth; no tuning | [fill: PR-AUC above Dummy and LogReg? Or between them?] |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with `class_weight="balanced"`, default hyperparameters, no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
 | Operating-rule demo | Threshold 0.5 vs top-20 % ranking for HistGBT; showed flagged count, recall, precision | [fill: does top-20 % improve recall? How many more customers are flagged? Is this the right rule for the retention campaign?] |
 | Shortlist | Top-2 non-Dummy models by PR-AUC; 4.5 has evidence-based text with fill placeholders | [fill: do you agree with the two shortlisted models? Is there a reason to prefer a different second model?] |
+| No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | *[add rows as needed]* | | |

@@ -53,6 +53,7 @@ the customer leaves.
 | **Primary** | **PR-AUC** (area under the Precision–Recall curve) | With an imbalanced dataset, PR-AUC gives a more informative summary of performance across thresholds than ROC-AUC, because it is sensitive to false-positive inflation in the minority class (Davis & Goadrich, 2006). |
 | **Secondary** | **ROC-AUC** | A widely reported threshold-free metric that allows comparison with published benchmarks. Less sensitive to class imbalance than PR-AUC but still useful as a complementary view. |
 | **Operational** | **Recall @ top 20%** | Simulates a realistic business constraint: if the retention team can contact only the top 20% of customers ranked by predicted churn probability, what fraction of actual churners does the model capture? This directly measures the model's usefulness under limited intervention capacity. |
+| **Operational** | **Precision @ top 20%** | Of the 20% of customers the model flags as highest-risk, what fraction are genuine churners? This measures campaign cost-efficiency — high precision means fewer wasted retention offers sent to loyal customers. Together with Recall@top-20%, it fully characterises the quality of the top-20% operating bucket. |
 
 ### Constraints
 
@@ -83,4 +84,5 @@ AI coding agent and what I personally verified or corrected.
 | Project scaffolding | Created repo structure, README, `.gitignore`, `requirements.txt` | Reviewed all files; corrected filename inconsistency (`Churn Modelling` → `Churn_Modelling`); required dummy baseline + MLP in model set; required `.xlsx` gitignore |
 | Data access setup | Created `src/data_loader.py` with full → sample fallback and Kaggle link; committed 200-row sample CSV; updated README | Ran sanity-check command; tested full-load, sample-fallback, and missing-file error paths; confirmed full CSV not tracked in git, sample committed |
 | Section 1 draft | Drafted this markdown (1.1–1.5) with placeholders | Filled in all `[placeholders]` after running notebook; verified metric rationale against lecture notes; checked assumptions against dataset documentation |
+| Precision@top-20% metric | Agent added Precision@top-20% as a fourth metric in the Section 1.3 table, complementing Recall@top-20% | I requested this addition: Recall measures churner coverage, Precision measures campaign waste — both are needed to fully evaluate the top-20% operating bucket. Verified wording is consistent with Tasks 4 and 5 metric tables |
 | *[add rows as project progresses]* | | |

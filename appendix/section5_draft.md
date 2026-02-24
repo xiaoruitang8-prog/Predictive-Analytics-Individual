@@ -6,7 +6,9 @@
 
 1. **5.1 Sanity check — re-fit shortlisted models.**  Re-fit both
    shortlisted models from Task 4 (HistGBT and LogReg balanced) on
-   `X_train_t` and compare on `X_val_t` to confirm the Task 4 ranking holds.
+   `X_train_t` and compare on `X_val_t` using all 4 metrics (PR-AUC,
+   ROC-AUC, Recall@top-20%, Precision@top-20%) to confirm the Task 4
+   ranking holds.
 
 2. **5.2 Tune the primary candidate.**  `RandomizedSearchCV` on HistGBT
    (n\_iter=8, 3-fold CV, training only, `scoring="average_precision"`).
@@ -19,12 +21,15 @@
    before test access.
 
 4. **5.4 Final test evaluation.**  Test set accessed once.  Report PR-AUC,
-   ROC-AUC, Recall@top-20 %, and threshold-based metrics at the locked
-   threshold.
+   ROC-AUC, Recall@top-20 %, Precision@top-20 %, and threshold-based
+   metrics at the locked threshold.
 
-5. **5.5 Error analysis.**  Confusion matrix at the locked threshold,
-   PR curve (val vs test), calibration diagram, Geography failure-mode
-   slice.  Save figures to `outputs/`.
+5. **5.5 Error analysis — 4 diagnostics.**
+   - **(a)** Confusion matrix at the locked threshold
+   - **(b)** PR curve (val vs test overlay)
+   - **(c)** Calibration diagram + Brier score (quantifies calibration quality)
+   - **(d)** Geography failure-mode slice (fairness check)
+   Save figures to `outputs/`.
 
 6. **5.6 Agent-made mistake and fix.**  Demonstrate the `predict()` vs
    `predict_proba()` bug for PR-AUC; show concrete impact; confirm fix.
@@ -49,7 +54,7 @@ from sklearn.ensemble     import HistGradientBoostingClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics      import (average_precision_score, roc_auc_score,
                                    recall_score, precision_score,
-                                   precision_recall_curve)
+                                   precision_recall_curve, brier_score_loss)
 import numpy  as np
 import pandas as pd
 
@@ -295,6 +300,8 @@ recall at top-20 % is acceptable for the campaign.]*
 ```python
 # ── 5.5 Error analysis ─────────────────────────────────────────────────────────
 # Depends on: proba_test, pred_locked, LOCKED_THRESH from Cell 5.4
+# 4 diagnostics: (a) confusion matrix, (b) PR curve, (c) calibration + Brier,
+#                (d) geography failure-mode slice
 
 import matplotlib.pyplot as plt
 from sklearn.metrics import ConfusionMatrixDisplay, calibration_curve
@@ -342,8 +349,9 @@ fig2.savefig("outputs/5b_pr_curve.png", dpi=120, bbox_inches="tight")
 plt.show()
 print("Saved: outputs/5b_pr_curve.png")
 
-# ── (c) Calibration reliability diagram ───────────────────────────────────────
+# ── (c) Calibration reliability diagram + Brier score ────────────────────────
 prob_true, prob_pred = calibration_curve(y_test, proba_test, n_bins=10)
+brier = brier_score_loss(y_test, proba_test)
 
 fig3, axes3 = plt.subplots(1, 2, figsize=(10, 4))
 
@@ -351,7 +359,7 @@ axes3[0].plot(prob_pred, prob_true, marker="o", label="HistGBT (tuned)")
 axes3[0].plot([0, 1], [0, 1], "--", color="gray", label="Perfect calibration")
 axes3[0].set_xlabel("Mean predicted probability")
 axes3[0].set_ylabel("Fraction of positives")
-axes3[0].set_title("Calibration Curve (test)")
+axes3[0].set_title(f"Calibration Curve (test)  |  Brier = {brier:.4f}")
 axes3[0].legend()
 
 axes3[1].hist(proba_test[y_test == 0], bins=30, alpha=0.6,
@@ -367,6 +375,7 @@ axes3[1].legend(fontsize=8)
 fig3.tight_layout()
 fig3.savefig("outputs/5c_calibration.png", dpi=120, bbox_inches="tight")
 plt.show()
+print(f"Brier score: {brier:.4f}  (0 = perfect, 0.25 = no-skill at 50/50)")
 print("Saved: outputs/5c_calibration.png")
 
 # ── (d) Failure-mode slice: Geography ─────────────────────────────────────────
@@ -403,19 +412,26 @@ print(f"Worst geography: {worst} | Overall PR-AUC: {pr_auc_test}")
 **(a) Confusion matrix (threshold = [fill]):**
 
 *[fill: note TP (correct alerts), FP (wasted calls), FN (missed churners),
-TN.  Relate back to the F2 / recall-heavy choice: we accept some FP to
-minimise FN.]*
+TN.  Relate back to cost asymmetry: we accept some FP to minimise FN,
+consistent with Precision@top-20% measuring the wasted-intervention rate.]*
 
 **(b) PR curve — val vs test:**
 
 *[fill: is the gap small (< 0.02)?  Note where the locked threshold
 (red dot) sits on the curve.  A large gap signals val overfitting.]*
 
-**(c) Calibration:**
+**(c) Calibration + Brier score:**
 
-*[fill: does the curve track the diagonal?  If it bows above, the model
-over-predicts churn risk; if below, it under-predicts.  Comment on class
-separation in the histogram.]*
+Brier score = **[fill]**.  Interpretation: 0 = perfect calibration,
+0.25 = no-skill baseline for a 50/50 split.  For ~20 % churn prevalence,
+the no-skill Brier is ~0.16 (`prevalence × (1 − prevalence)`), so a
+Brier below 0.16 indicates the model's probabilities carry real
+information.
+
+*[fill: does the reliability curve track the diagonal?  If it bows above,
+the model over-predicts churn risk; if below, it under-predicts.  Comment
+on class separation in the histogram — good separation means the locked
+threshold sits in a low-density region between the two distributions.]*
 
 **(d) Geography slice:**
 
@@ -511,6 +527,16 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 - Predicting churn for products or populations outside the training data
   distribution (different bank, different country mix, etc.)
 
+**Key metrics (test set):**
+
+| Metric | Value |
+|--------|-------|
+| PR-AUC | *[fill]* |
+| ROC-AUC | *[fill]* |
+| Recall@top-20% | *[fill]* |
+| Precision@top-20% | *[fill]* |
+| Brier score | *[fill]* |
+
 **Data constraints:**
 - Trained on 10 000 customers from a single bank (Kaggle CC0 dataset)
 - Features: CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard,
@@ -526,17 +552,24 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
   regions — monitor in production
 - Probability calibration (Section 5.5c) should be checked periodically
   if the model is used for threshold-based decisions rather than ranking
+- Brier score quantifies calibration quality; recalibrate if it degrades
+  over time
 
 ---
 
-## Agent Plan vs My Verification
+## 5.7  My Agent vs My Verification
 
-| Step | What the Agent Did | What I Verified or Corrected |
+| Step | What My Agent Did | What I Verified or Corrected |
 |------|--------------------|------------------------------|
+| Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
 | Sanity check | Re-fit HistGBT and LogReg on training; compared on validation to confirm Task 4 ranking | *[fill: confirm HistGBT leads on PR-AUC; if ranking changed, investigate before continuing]* |
 | Tuning | `RandomizedSearchCV` on HistGBT: n\_iter=8, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params; confirm tuning gain ΔPR-AUC; note if marginal or meaningful]* |
 | Operating rule | Locked top-20 % ranking as main rule; derived threshold (80th-percentile of val probabilities) for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
-| Test evaluation | `hgbt_tuned.predict_proba(X_test_t)` called once; all metrics reported | *[fill: val → test PR-AUC gap ≤ 0.02? Flagged % ≈ 20 %? Confirm pred_locked uses LOCKED_THRESH not 0.5]* |
-| Error analysis | Confusion matrix, PR curve (val vs test), calibration, Geography slice; 3 PNGs saved | *[fill: check figures saved; verify Geography slice uses correct index alignment; note worst-performing geography]* |
+| Test evaluation | `hgbt_tuned.predict_proba(X_test_t)` called once; all 4 metrics + threshold metrics reported | *[fill: val → test PR-AUC gap ≤ 0.02? Flagged % ≈ 20 %? Confirm pred_locked uses LOCKED_THRESH not 0.5]* |
+| Error analysis (CM) | Confusion matrix at locked threshold; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
+| Error analysis (PR curve) | PR curve comparing val vs test; locked threshold marked as red dot | *[fill: is gap < 0.02? Does red dot sit at an acceptable recall/precision trade-off?]* |
+| Error analysis (calibration) | Agent initially had calibration curve only. I requested adding Brier score to quantify calibration quality as a single number | *[fill: note Brier score; compare to no-skill baseline (prevalence × (1−prevalence) ≈ 0.16); comment on reliability curve shape]* |
+| Error analysis (geography) | Per-country PR-AUC and Recall@top-20%; identifies worst-performing geography | *[fill: check index alignment (df_model.loc[y_test.index]); note worst geography; flag fairness implications]* |
 | Agent mistake | Demonstrated predict() vs predict_proba() for PR-AUC; showed Δ; self-checked evaluate() | *[fill: note actual Δ; confirm buggy < correct; confirm assert passed]* |
+| Model card | Agent drafted model card with intended use, limitations, data constraints, and evaluation caveats. I requested adding a metrics summary table with all 4 metrics + Brier score | *[fill: confirm model card accurately reflects final model and results]* |
 | *[add rows as needed]* | | |
