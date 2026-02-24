@@ -27,7 +27,7 @@
 5. **5.5 Error analysis — 4 diagnostics.**
    - **(a)** Confusion matrix at the locked threshold
    - **(b)** PR curve (val vs test overlay)
-   - **(c)** Calibration diagram + Brier score (quantifies calibration quality)
+   - **(c)** Calibration diagram (reliability curve + score distribution)
    - **(d)** Geography failure-mode slice (fairness check)
    Save figures to `outputs/`.
 
@@ -54,7 +54,7 @@ from sklearn.ensemble     import HistGradientBoostingClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics      import (average_precision_score, roc_auc_score,
                                    recall_score, precision_score,
-                                   precision_recall_curve, brier_score_loss)
+                                   precision_recall_curve)
 import numpy  as np
 import pandas as pd
 
@@ -300,7 +300,7 @@ recall at top-20 % is acceptable for the campaign.]*
 ```python
 # ── 5.5 Error analysis ─────────────────────────────────────────────────────────
 # Depends on: proba_test, pred_locked, LOCKED_THRESH from Cell 5.4
-# 4 diagnostics: (a) confusion matrix, (b) PR curve, (c) calibration + Brier,
+# 4 diagnostics: (a) confusion matrix, (b) PR curve, (c) calibration,
 #                (d) geography failure-mode slice
 
 import matplotlib.pyplot as plt
@@ -349,9 +349,8 @@ fig2.savefig("outputs/5b_pr_curve.png", dpi=120, bbox_inches="tight")
 plt.show()
 print("Saved: outputs/5b_pr_curve.png")
 
-# ── (c) Calibration reliability diagram + Brier score ────────────────────────
+# ── (c) Calibration reliability diagram ───────────────────────────────────────
 prob_true, prob_pred = calibration_curve(y_test, proba_test, n_bins=10)
-brier = brier_score_loss(y_test, proba_test)
 
 fig3, axes3 = plt.subplots(1, 2, figsize=(10, 4))
 
@@ -359,7 +358,7 @@ axes3[0].plot(prob_pred, prob_true, marker="o", label="HistGBT (tuned)")
 axes3[0].plot([0, 1], [0, 1], "--", color="gray", label="Perfect calibration")
 axes3[0].set_xlabel("Mean predicted probability")
 axes3[0].set_ylabel("Fraction of positives")
-axes3[0].set_title(f"Calibration Curve (test)  |  Brier = {brier:.4f}")
+axes3[0].set_title("Calibration Curve (test)")
 axes3[0].legend()
 
 axes3[1].hist(proba_test[y_test == 0], bins=30, alpha=0.6,
@@ -375,7 +374,6 @@ axes3[1].legend(fontsize=8)
 fig3.tight_layout()
 fig3.savefig("outputs/5c_calibration.png", dpi=120, bbox_inches="tight")
 plt.show()
-print(f"Brier score: {brier:.4f}  (0 = perfect, 0.25 = no-skill at 50/50)")
 print("Saved: outputs/5c_calibration.png")
 
 # ── (d) Failure-mode slice: Geography ─────────────────────────────────────────
@@ -420,13 +418,7 @@ consistent with Precision@top-20% measuring the wasted-intervention rate.]*
 *[fill: is the gap small (< 0.02)?  Note where the locked threshold
 (red dot) sits on the curve.  A large gap signals val overfitting.]*
 
-**(c) Calibration + Brier score:**
-
-Brier score = **[fill]**.  Interpretation: 0 = perfect calibration,
-0.25 = no-skill baseline for a 50/50 split.  For ~20 % churn prevalence,
-the no-skill Brier is ~0.16 (`prevalence × (1 − prevalence)`), so a
-Brier below 0.16 indicates the model's probabilities carry real
-information.
+**(c) Calibration:**
 
 *[fill: does the reliability curve track the diagonal?  If it bows above,
 the model over-predicts churn risk; if below, it under-predicts.  Comment
@@ -535,7 +527,6 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | ROC-AUC | *[fill]* |
 | Recall@top-20% | *[fill]* |
 | Precision@top-20% | *[fill]* |
-| Brier score | *[fill]* |
 
 **Data constraints:**
 - Trained on 10 000 customers from a single bank (Kaggle CC0 dataset)
@@ -552,8 +543,8 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
   regions — monitor in production
 - Probability calibration (Section 5.5c) should be checked periodically
   if the model is used for threshold-based decisions rather than ranking
-- Brier score quantifies calibration quality; recalibrate if it degrades
-  over time
+- If the model is used for threshold-based decisions, periodic
+  recalibration may be needed
 
 ---
 
@@ -568,8 +559,8 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Test evaluation | `hgbt_tuned.predict_proba(X_test_t)` called once; all 4 metrics + threshold metrics reported | *[fill: val → test PR-AUC gap ≤ 0.02? Flagged % ≈ 20 %? Confirm pred_locked uses LOCKED_THRESH not 0.5]* |
 | Error analysis (CM) | Confusion matrix at locked threshold; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
 | Error analysis (PR curve) | PR curve comparing val vs test; locked threshold marked as red dot | *[fill: is gap < 0.02? Does red dot sit at an acceptable recall/precision trade-off?]* |
-| Error analysis (calibration) | Agent initially had calibration curve only. I requested adding Brier score to quantify calibration quality as a single number | *[fill: note Brier score; compare to no-skill baseline (prevalence × (1−prevalence) ≈ 0.16); comment on reliability curve shape]* |
+| Error analysis (calibration) | Calibration reliability curve + score-distribution histogram; saved to `outputs/5c_calibration.png` | *[fill: does reliability curve track the diagonal? Comment on class separation in the histogram]* |
 | Error analysis (geography) | Per-country PR-AUC and Recall@top-20%; identifies worst-performing geography | *[fill: check index alignment (df_model.loc[y_test.index]); note worst geography; flag fairness implications]* |
 | Agent mistake | Demonstrated predict() vs predict_proba() for PR-AUC; showed Δ; self-checked evaluate() | *[fill: note actual Δ; confirm buggy < correct; confirm assert passed]* |
-| Model card | Agent drafted model card with intended use, limitations, data constraints, and evaluation caveats. I requested adding a metrics summary table with all 4 metrics + Brier score | *[fill: confirm model card accurately reflects final model and results]* |
+| Model card | Agent drafted model card with intended use, limitations, data constraints, evaluation caveats, and 4-metric summary table | *[fill: confirm model card accurately reflects final model and results]* |
 | *[add rows as needed]* | | |
