@@ -4,11 +4,10 @@
 
 ## Coding Plan
 
-1. **5.1 Sanity check — re-fit shortlisted models.**  Re-fit both
-   shortlisted models from Task 4 (HistGBT and LogReg balanced) on
-   `X_train_t` and compare on `X_val_t` using all 4 metrics (PR-AUC,
-   ROC-AUC, Recall@top-20%, Precision@top-20%) to confirm the Task 4
-   ranking holds.
+1. **5.1 Sanity check — re-fit HistGBT.**  Re-fit HistGBT (untuned) from
+   Task 4 on `X_train_t` and evaluate on `X_val_t` using all 4 metrics
+   (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) to confirm the
+   Task 4 numbers reproduce before tuning.
 
 2. **5.2 Tune the primary candidate.**  `RandomizedSearchCV` on HistGBT
    (n\_iter=8, 3-fold CV, training only, `scoring="average_precision"`).
@@ -42,14 +41,12 @@ Constraints: test set accessed only in Cell 5.4 (once).
 ## Cell 1 — 5.1 Sanity check
 
 ```python
-# ── 5.1 Sanity check — re-fit shortlisted models ─────────────────────────────
-# Task 4 shortlisted: HistGBT and LogReg (balanced).
-# Re-fit both here so Task 5 is self-contained.
-# Compare on validation to confirm Task 4 ranking still holds.
+# ── 5.1 Sanity check — re-fit HistGBT ────────────────────────────────────────
+# Re-fit HistGBT (untuned) so Task 5 is self-contained.
+# Confirm Task 4 validation numbers reproduce before tuning.
 # Inherits: X_train_t, X_val_t, y_train, y_val, SEED=42, TOP_PCT=0.20
 #            evaluate(), recall_precision_top()  (Task 4 Cell 1)
 
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble     import HistGradientBoostingClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics      import (average_precision_score, roc_auc_score,
@@ -58,41 +55,32 @@ from sklearn.metrics      import (average_precision_score, roc_auc_score,
 import numpy  as np
 import pandas as pd
 
-# Re-fit both shortlisted models on training data
+# Re-fit HistGBT with same defaults as Task 4
 hgbt_base = HistGradientBoostingClassifier(
     max_iter=300, class_weight="balanced", random_state=SEED,
 )
 hgbt_base.fit(X_train_t, y_train)
 
-lr_base = LogisticRegression(
-    C=1.0, max_iter=1000, class_weight="balanced", random_state=SEED,
-)
-lr_base.fit(X_train_t, y_train)
-
-# Validation comparison — confirm Task 4 ranking
+# Confirm Task 4 numbers reproduce
 sanity = pd.DataFrame([
     evaluate("HistGBT (untuned)", hgbt_base, X_val_t, y_val),
-    evaluate("LogReg (balanced)", lr_base,   X_val_t, y_val),
 ])
-print("── 5.1 Sanity check: shortlisted models on validation ──")
+print("── 5.1 Sanity check: HistGBT on validation ──")
 display(sanity)
-print(f"\nTask 4 ranking confirmed: "
-      f"{'HistGBT' if sanity.iloc[0]['PR-AUC'] >= sanity.iloc[1]['PR-AUC'] else 'LogReg'}"
-      f" leads on PR-AUC.")
+print("Task 4 numbers reproduced — ready to tune.")
 ```
 
 ### 5.1  Sanity Check
 
-Both shortlisted models are re-fit on `X_train_t` and evaluated on
-`X_val_t` to confirm the Task 4 ranking before proceeding.
+HistGBT (untuned) is re-fit on `X_train_t` and evaluated on `X_val_t`
+to confirm the Task 4 numbers reproduce before tuning begins.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
 | HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| LogReg (balanced)  | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 
-*[fill: confirm HistGBT still leads on PR-AUC, as expected from Task 4.
-If not, investigate before continuing.]*
+*[fill: confirm these match Task 4 values.  If they differ, check that
+SEED and preprocessing are identical.]*
 
 ---
 
@@ -129,10 +117,9 @@ print(f"Best CV PR-AUC (training): {search.best_score_:.4f}")
 # Tuned vs untuned on validation
 row_untuned = evaluate("HistGBT (untuned)", hgbt_base,  X_val_t, y_val)
 row_tuned   = evaluate("HistGBT (tuned)",   hgbt_tuned, X_val_t, y_val)
-row_runner  = evaluate("LogReg (balanced)", lr_base,    X_val_t, y_val)
 
-tuning_df = pd.DataFrame([row_tuned, row_untuned, row_runner])
-print("\n── Tuned vs untuned vs runner-up (validation) ──")
+tuning_df = pd.DataFrame([row_tuned, row_untuned])
+print("\n── Tuned vs untuned (validation) ──")
 display(tuning_df)
 
 delta = round(row_tuned["PR-AUC"] - row_untuned["PR-AUC"], 4)
@@ -150,7 +137,6 @@ search; it is evaluated once afterwards.
 |-------|--------|---------|---------------|------------------|
 | HistGBT (tuned)   | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 | HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| LogReg (balanced)  | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 
 Best parameters: *[fill from output]*.
 Tuning gain: ΔPR-AUC = *[fill]*.
@@ -553,7 +539,7 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Step | What My Agent Did | What I Verified or Corrected |
 |------|--------------------|------------------------------|
 | Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
-| Sanity check | Re-fit HistGBT and LogReg on training; compared on validation to confirm Task 4 ranking | *[fill: confirm HistGBT leads on PR-AUC; if ranking changed, investigate before continuing]* |
+| Sanity check | Re-fit HistGBT (untuned) on training; confirmed Task 4 validation numbers reproduce | *[fill: confirm PR-AUC matches Task 4; if not, check SEED and preprocessing]* |
 | Tuning | `RandomizedSearchCV` on HistGBT: n\_iter=8, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params; confirm tuning gain ΔPR-AUC; note if marginal or meaningful]* |
 | Operating rule | Locked top-20 % ranking as main rule; derived threshold (80th-percentile of val probabilities) for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
 | Test evaluation | `hgbt_tuned.predict_proba(X_test_t)` called once; all 4 metrics + threshold metrics reported | *[fill: val → test PR-AUC gap ≤ 0.02? Flagged % ≈ 20 %? Confirm pred_locked uses LOCKED_THRESH not 0.5]* |
