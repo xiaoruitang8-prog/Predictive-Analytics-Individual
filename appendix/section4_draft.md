@@ -129,11 +129,10 @@ further.
 ```python
 # ── 4.3 Tree ensemble + modern model ─────────────────────────────────────────
 
-# 3. RandomForest — balanced_subsample re-weights each bootstrap sample.
+# 3. RandomForest — sklearn defaults (no class_weight, no tuning).
 #    200 trees for stable probability estimates; n_jobs=-1 for speed.
 rf = RandomForestClassifier(
     n_estimators=200,
-    class_weight="balanced_subsample",
     random_state=SEED,
     n_jobs=-1,
 )
@@ -142,11 +141,8 @@ results.append(evaluate("RandomForest", rf, X_val_t, y_val))
 
 # 4. HistGradientBoosting — modern sklearn-native tabular model.
 #    Histogram-binned O(n) splits; handles missing values natively.
-#    class_weight="balanced" re-weights the gradient each iteration.
-#    Default hyperparameters only — tuning is deferred to Task 5.
+#    All defaults (no class_weight) — tuning is deferred to Task 5.
 hgbt = HistGradientBoostingClassifier(
-    max_iter=300,
-    class_weight="balanced",
     random_state=SEED,
 )
 hgbt.fit(X_train_t, y_train)
@@ -158,17 +154,14 @@ display(pd.DataFrame(results[-2:]))
 
 ### 4.3  Tree Ensemble and Modern Tabular Model
 
-**RandomForest** uses `balanced_subsample`, which re-weights classes
-independently per bootstrap sample — more robust than a single global weight
-for bagged ensembles.  200 trees give stable probability estimates on
-~7 000 training rows.
+**RandomForest** uses sklearn defaults — no class reweighting, no depth
+limit, 200 trees for stable probability estimates on ~7 000 training rows.
 
 **HistGradientBoosting** is the modern tabular approach in this comparison.
-Histogram binning makes each boosting round O(n\_bins × n\_features);
-`class_weight="balanced"` re-weights the gradient at every iteration.
-All hyperparameters are sklearn defaults (except `max_iter=300` and
-`class_weight`); tuning is deferred to Task 5 to keep this section a pure
-model-selection exercise.
+Histogram binning makes each boosting round O(n\_bins × n\_features).
+All hyperparameters are sklearn defaults; tuning — including whether
+`class_weight="balanced"` helps — is deferred to Task 5 to keep this
+section a pure model-architecture comparison.
 
 > **Why not XGBoost / LightGBM?**  Neither is in `requirements.txt`.
 > `HistGradientBoostingClassifier` (sklearn ≥ 1.0) is the sklearn-native
@@ -293,9 +286,10 @@ remains untouched for Task 5.
 | Baseline (Dummy) | `DummyClassifier(most_frequent)` fitted and evaluated; sets PR-AUC floor | [fill: confirm PR-AUC ≈ 0.20 and ROC-AUC ≈ 0.50 — if not, something is wrong] |
 | Baseline (LogReg) | LogReg with default settings as linear baseline; confirms features carry signal above Dummy floor | PR-AUC = 0.5068 — sharp jump over Dummy (0.2040), confirming real signal exists. Establishes the linear ceiling that tree models must beat |
 | Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). Dummy (floor) → LogReg → RF + HistGBT gives a clean no-skill → linear → ensemble → boosting progression. Dummy is stated as the floor but hidden from comparison tables to keep them focused | [fill: confirm all 4 models fit without error; all PR-AUCs above the no-skill floor (0.2040)] |
-| RandomForest | `balanced_subsample`, 200 trees, default depth; no tuning | [fill: PR-AUC above Dummy and LogReg? Or between them?] |
-| HistGBT (modern) | `HistGradientBoostingClassifier` with `class_weight="balanced"`, default hyperparameters, no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
+| RandomForest | sklearn defaults, 200 trees, no `class_weight`; no tuning | [fill: PR-AUC above LogReg? Or between them?] |
+| HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
 | Operating-rule demo | Threshold 0.5 vs top-20 % ranking for HistGBT; showed flagged count, recall, precision | [fill: does top-20 % improve recall? How many more customers are flagged? Is this the right rule for the retention campaign?] |
 | Shortlist | Top-2 models by PR-AUC (excl. Dummy floor); 4.5 has evidence-based text with fill placeholders | [fill: do you agree with the two shortlisted models? Is there a reason to prefer a different second model?] |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
+| `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in Task 5 `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) moving it to Task 5 gives a cleaner Task 4 narrative and a stronger tuning story |
 | *[add rows as needed]* | | |

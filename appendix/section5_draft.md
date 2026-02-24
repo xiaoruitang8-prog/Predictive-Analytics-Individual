@@ -55,10 +55,8 @@ from sklearn.metrics      import (average_precision_score, roc_auc_score,
 import numpy  as np
 import pandas as pd
 
-# Re-fit HistGBT with same defaults as Task 4
-hgbt_base = HistGradientBoostingClassifier(
-    max_iter=300, class_weight="balanced", random_state=SEED,
-)
+# Re-fit HistGBT with same defaults as Task 4 (no class_weight)
+hgbt_base = HistGradientBoostingClassifier(random_state=SEED)
 hgbt_base.fit(X_train_t, y_train)
 
 # Confirm Task 4 numbers reproduce
@@ -97,10 +95,11 @@ param_dist = {
     "max_depth":        [3, 5, None],
     "learning_rate":    [0.05, 0.1, 0.2],
     "min_samples_leaf": [20, 40],
+    "class_weight":     [None, "balanced"],
 }
 
 search = RandomizedSearchCV(
-    HistGradientBoostingClassifier(class_weight="balanced", random_state=SEED),
+    HistGradientBoostingClassifier(random_state=SEED),
     param_distributions=param_dist,
     n_iter=8,
     cv=3,
