@@ -117,19 +117,45 @@ winner = "balanced" if results[2]["PR-AUC"] > results[1]["PR-AUC"] else "default
 print(f"\nLogReg winner: class_weight='{winner}'")
 ```
 
-### 4.2  Baselines
+### 4.2  Baselines and Class-Weight Ablation
 
-**Dummy (most\_frequent)** always predicts non-churn.  PR-AUC ≈ prevalence
-(~0.20), ROC-AUC ≈ 0.50.  Every useful model must clearly exceed this
-floor.
+**Dummy (most\_frequent)** always predicts the majority class (Stay).
+PR-AUC = 0.2040 (≈ churn prevalence), ROC-AUC = 0.50.  This is the
+no-skill floor — every useful model must clearly exceed it.
 
-**LogReg class-weight ablation.**  `class_weight="balanced"` multiplies each
-sample's loss by `n_samples / (2 × n_class)`, so missed churners contribute
-more gradient.  The ablation isolates this single variable: same C, same
-solver, same features.
+**LogReg (default)** jumps to PR-AUC = 0.5068 and ROC-AUC = 0.7846,
+confirming the features carry real predictive signal and that even a
+simple linear model ranks customers well above chance.
 
-*[fill: which variant wins?  By how much in PR-AUC?  Does balanced
-weighting help as expected on ~20 % imbalance?]*
+**Class-weight ablation** — the only controlled variable is
+`class_weight` (None vs `"balanced"`); C, solver, max\_iter, and seed
+are identical.
+
+| Variant | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
+|---------|--------|---------|---------------|------------------|
+| LogReg (default)  | **0.5068** | 0.7846 | 0.5033 | 0.5133 |
+| LogReg (balanced) | 0.4975 | **0.7891** | **0.5131** | **0.5233** |
+
+The balanced variant nudges the top-20 % bucket metrics up slightly
+(+0.01 recall, +0.01 precision) by shifting the decision boundary
+toward the minority class — it flags a few more borderline customers
+as churners.  However, this comes at the cost of PR-AUC (−0.009),
+meaning overall ranking quality across all thresholds is slightly
+worse.
+
+**Why the mixed result?**  At ~20 % churn the imbalance is moderate,
+not extreme.  `class_weight="balanced"` is most beneficial when the
+minority class is rare enough that the optimizer essentially ignores
+it (e.g. < 5 %).  At 20 % the default loss already sees enough
+positive-class gradient, so reweighting over-corrects slightly —
+improving recall in the top bucket but hurting the tail of the PR
+curve.
+
+**Decision:** keep LogReg (default) as the baseline variant because
+PR-AUC is the primary metric.  The ablation is still informative: it
+shows that class weighting is not a free lunch at moderate imbalance
+and that the choice depends on whether you optimise for the full
+ranking (PR-AUC) or a specific operating point (top-20 % bucket).
 
 ---
 
@@ -276,25 +302,21 @@ Does recall increase?  Is precision acceptable?]*
 
 ---
 
-**Shortlisted for Task 5: HistGBT and LogReg (balanced)**
+**Shortlisted for Task 5: RandomForest and HistGBT**
 
-On the validation set, **HistGBT** achieves the highest PR-AUC of
-**[fill]** and Recall@top-20 % = **[fill]**, capturing the largest fraction
-of churners under the campaign's capacity constraint.  It is the primary
-candidate for tuning in Task 5.
+On the validation set, **RandomForest** leads with PR-AUC = **0.6957**
+and **HistGBT** follows closely at **0.6952** — both roughly 0.19 points
+above the best LogReg variant.  Both tree ensembles capture over 60 % of
+churners in the top-20 % bucket, making them the clear candidates for
+tuning in Task 5.
 
-**LogReg (balanced)** is the second candidate (PR-AUC = **[fill]**).  It
-provides coefficient-level interpretability — individual churn drivers
-can be explained to business stakeholders, addressing the interpretability
-constraint noted in Section 1.4.
+LogReg (default, PR-AUC = 0.5068) is well above the Dummy floor but
+substantially behind the tree models — the non-linear interactions that
+trees capture (e.g. Age × NumOfProducts) cannot be recovered by a
+linear decision boundary.
 
 Both models were selected on **validation metrics only**; the test set
 remains untouched for Task 5.
-
-*Guidance: if RandomForest outperforms LogReg, substitute it as the second
-candidate and note the interpretability trade-off.  The key criterion is
-that the two shortlisted models offer complementary strengths (performance
-vs interpretability).*
 
 ---
 
@@ -305,7 +327,7 @@ vs interpretability).*
 | Metric set | Agent initially proposed 3 metrics (PR-AUC, ROC-AUC, Recall@top-20%). I requested adding Precision@top-20% as a fourth metric to measure campaign cost-efficiency | I confirmed that Precision@top-20% is mechanically linked to Recall@top-20% under a fixed-bucket rule but tells a different business story (wasted interventions vs churner coverage). Updated Section 1.3 accordingly |
 | Evaluation function | Defined `evaluate()` with 4 metrics and `recall_precision_top()` helper; uses `predict_proba` not `predict`; test set never passed in Task 4 | [fill: confirm Cell 1 runs without error; check dict keys match column names in the comparison table] |
 | Baseline (Dummy) | `DummyClassifier(most_frequent)` fitted and evaluated; sets PR-AUC floor | [fill: confirm PR-AUC ≈ 0.20 and ROC-AUC ≈ 0.50 — if not, something is wrong] |
-| Class-weight ablation | LogReg `default` vs `balanced` — only `class_weight` differs; winner printed automatically | [fill: which variant wins? By how much? Does balanced help as expected?] |
+| Class-weight ablation | LogReg `default` vs `balanced` — only `class_weight` differs; winner printed automatically | Default wins on PR-AUC (0.5068 vs 0.4975); balanced edges ahead on Recall/Precision@top-20% (+0.01). At ~20% imbalance, reweighting over-corrects slightly — not a free lunch. Kept default as baseline variant |
 | Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). I confirmed this matches the plan: Dummy → LogReg ablation → RF + HistGBT. No MLP — the plan focuses on tree/linear models | [fill: confirm all 4 models fit without error; all PR-AUCs above Dummy floor] |
 | RandomForest | `balanced_subsample`, 200 trees, default depth; no tuning | [fill: PR-AUC above Dummy and LogReg? Or between them?] |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with `class_weight="balanced"`, default hyperparameters, no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
