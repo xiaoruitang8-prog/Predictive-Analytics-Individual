@@ -21,8 +21,8 @@
 4. **4.4 Full comparison, operating-rule demo, and shortlist.**  One sorted
    table of all models.  A small controlled comparison: HistGBT with
    threshold 0.5 vs top-20% ranking, showing why ranking is more relevant
-   for a fixed-capacity retention campaign.  Shortlist top-2 non-Dummy
-   models for Task 5.
+   for a fixed-capacity retention campaign.  Shortlist top-2 models
+   (excl. Dummy floor) for Task 5.
 
 Constraints: **no hyperparameter search** in Task 4 — all models use
 sensible defaults.  Test set **never touched**.  `random_state=SEED`
@@ -175,7 +175,7 @@ model-selection exercise.
 > equivalent, avoiding an extra dependency.
 
 *[fill: which model has the highest PR-AUC at this stage?  Does HistGBT
-beat RandomForest?  Are both clearly above the Dummy floor?]*
+beat RandomForest?  Are both clearly above the no-skill floor (0.2040)?]*
 
 ---
 
@@ -189,7 +189,9 @@ results_df = (
     .reset_index(drop=True)
 )
 print("=== Validation results — all models, sorted by PR-AUC ===")
-display(results_df)
+# Dummy is the no-skill floor (PR-AUC ≈ 0.20) — stated in text, hidden
+# from table to keep the comparison focused on real contenders.
+display(results_df[~results_df["Model"].str.startswith("Dummy")])
 
 # ── Controlled comparison: operating rule (HistGBT) ──────────────────────────
 # Why top-20% ranking beats a fixed 0.5 threshold for a capacity-constrained
@@ -227,19 +229,18 @@ shortlist = (
     .head(2)
     .reset_index(drop=True)
 )
-print("\n=== Shortlisted for Task 5 (top-2 non-Dummy by PR-AUC) ===")
+print("\n=== Shortlisted for Task 5 (top-2 by PR-AUC, excl. Dummy floor) ===")
 display(shortlist)
 ```
 
 ### 4.4  Full Comparison and Operating-Rule Demo
 
-**Validation results** (all models, one shared `evaluate()`, sorted by
-PR-AUC):
+**Validation results** (sorted by PR-AUC; Dummy floor omitted —
+PR-AUC ≈ 0.20, ROC-AUC = 0.50):
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
 | *[fill from Cell 4 output]* | | | | |
-| | | | | |
 | | | | | |
 | | | | | |
 
@@ -273,10 +274,10 @@ and **HistGBT** follows closely at **0.6952** — both roughly 0.19 points
 above LogReg.  Both tree ensembles capture over 60 % of churners in the
 top-20 % bucket, making them the clear candidates for tuning in Task 5.
 
-LogReg (PR-AUC = 0.5068) is well above the Dummy floor but substantially
-behind the tree models — the non-linear interactions that trees capture
-(e.g. Age × NumOfProducts) cannot be recovered by a linear decision
-boundary.
+LogReg (PR-AUC = 0.5068) is well above the no-skill floor (0.2040) but
+substantially behind the tree models — the non-linear interactions that
+trees capture (e.g. Age × NumOfProducts) cannot be recovered by a linear
+decision boundary.
 
 Both models were selected on **validation metrics only**; the test set
 remains untouched for Task 5.
@@ -291,10 +292,10 @@ remains untouched for Task 5.
 | Evaluation function | Defined `evaluate()` with 4 metrics and `recall_precision_top()` helper; uses `predict_proba` not `predict`; test set never passed in Task 4 | [fill: confirm Cell 1 runs without error; check dict keys match column names in the comparison table] |
 | Baseline (Dummy) | `DummyClassifier(most_frequent)` fitted and evaluated; sets PR-AUC floor | [fill: confirm PR-AUC ≈ 0.20 and ROC-AUC ≈ 0.50 — if not, something is wrong] |
 | Baseline (LogReg) | LogReg with default settings as linear baseline; confirms features carry signal above Dummy floor | PR-AUC = 0.5068 — sharp jump over Dummy (0.2040), confirming real signal exists. Establishes the linear ceiling that tree models must beat |
-| Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). Dummy → LogReg → RF + HistGBT gives a clean no-skill → linear → ensemble → boosting progression | [fill: confirm all 4 models fit without error; all PR-AUCs above Dummy floor] |
+| Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). Dummy (floor) → LogReg → RF + HistGBT gives a clean no-skill → linear → ensemble → boosting progression. Dummy is stated as the floor but hidden from comparison tables to keep them focused | [fill: confirm all 4 models fit without error; all PR-AUCs above the no-skill floor (0.2040)] |
 | RandomForest | `balanced_subsample`, 200 trees, default depth; no tuning | [fill: PR-AUC above Dummy and LogReg? Or between them?] |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with `class_weight="balanced"`, default hyperparameters, no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
 | Operating-rule demo | Threshold 0.5 vs top-20 % ranking for HistGBT; showed flagged count, recall, precision | [fill: does top-20 % improve recall? How many more customers are flagged? Is this the right rule for the retention campaign?] |
-| Shortlist | Top-2 non-Dummy models by PR-AUC; 4.5 has evidence-based text with fill placeholders | [fill: do you agree with the two shortlisted models? Is there a reason to prefer a different second model?] |
+| Shortlist | Top-2 models by PR-AUC (excl. Dummy floor); 4.5 has evidence-based text with fill placeholders | [fill: do you agree with the two shortlisted models? Is there a reason to prefer a different second model?] |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | *[add rows as needed]* | | |
