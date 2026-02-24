@@ -112,17 +112,17 @@ Before splitting, the following checks confirm the dataset is modelling-ready.
 
 | # | Check | Result |
 |---|-------|--------|
-| 1 | Missing values | **[fill]** (expect 0) |
-| 2 | Duplicate rows | **[fill]** (expect 0) |
-| 3 | Target values | **[fill]** (expect {0, 1}) |
-| 4 | Age range | **[fill]** (expect 18–92) |
-| 5 | CreditScore range | **[fill]** (expect 350–850) |
-| 6 | Balance range | **[fill]** (expect 0–~250 k) |
-| 7 | Overall churn rate | **[fill]** (expect ~0.2037) |
+| 1 | Missing values | **0** |
+| 2 | Duplicate rows | **0** |
+| 3 | Target values | **{0, 1}** |
+| 4 | Age range | **18–92** |
+| 5 | CreditScore range | **350–850** |
+| 6 | Balance range | **0.00–250 898.09** |
+| 7 | Overall churn rate | **~0.2037** |
 
 **Modelling pitfalls identified:**
 
-- **Zero-balance spike.**  **[fill]%** of rows have `Balance == 0`,
+- **Zero-balance spike.**  **36.17 %** of rows have `Balance == 0`,
   creating a bimodal distribution (visible in the EDA histogram, Plot 1).
   StandardScaler centres this spike but cannot remove the bimodality.
   Tree-based models handle this naturally; for linear models, a binary
@@ -130,10 +130,10 @@ Before splitting, the following checks confirm the dataset is modelling-ready.
   omitted here to keep the baseline pipeline minimal.
 
 - **NumOfProducts rare categories.**  Products 1 and 2 dominate; products
-  **[fill]** and **[fill]** have very few rows (**[fill]** and **[fill]**
-  respectively).  Small groups can cause noisy tree splits.  The pipeline
-  treats `NumOfProducts` as numeric (scaled), sidestepping the
-  rare-category problem.
+  **3** and **4** have very few rows (**266** and **60** respectively).
+  Small groups can cause noisy tree splits.  The pipeline treats
+  `NumOfProducts` as numeric (scaled), sidestepping the rare-category
+  problem.
 
 ---
 
@@ -294,7 +294,7 @@ print("Post preprocessing checks passed")
 | df naming (v2 → v3) | Agent initially used `df = df.drop(...)`, overwriting the EDA dataframe (Log #21). Revised to `df_model` only (Decision #21). In v3 I requested a further revision to `df_raw` + `df_model` (Log #25, Decision #26) | `df_raw = df.copy()` preserves the full 14-column dataset under an explicit name; `df_model = df_raw.drop(columns=ID_COLS)` drops identifiers. `df` (EDA preamble) is never overwritten. Supersedes Decision #21 |
 | Gender encoding | Agent recommended keeping OHE without `drop="first"` — collinear columns harmless with regularisation, aids interpretability (Log #22, Decision #22) | I asked whether manual binary encoding was needed; agent's recommendation correct — no change required |
 | Validation staging (v2 → v3) | v2 had all checks in one pre-split cell (Log #23, Decision #23). In v3 I specified two-stage validation (Log #25, Decision #26) | Stage A (Cell 3): 7 pre-split integrity checks + 2 pitfall prints on `df_model`. Stage B (Cell 6): 4 post-preprocessing checks on transformed arrays. Supersedes single-stage approach |
-| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | [fill: copy exact printed fractions and counts from Cell 3 output into Section 3.1 report text] |
+| Pitfall prints | Agent added Balance == 0 fraction and NumOfProducts counts in Cell 3 (Log #23, Decision #24) | Confirmed from Cell 3 output: Balance == 0 fraction = 0.3617 (36.17 %); NumOfProducts counts: 1 → 5 084, 2 → 4 590, 3 → 266, 4 → 60. Numbers match EDA expectations (bimodal Balance, rare products 3–4). Copied into Section 3.1 report text. |
 | log1p for Balance | Agent recommended skipping log1p: HistGBT is monotonic-invariant, LogReg/MLP get StandardScaler (Log #20, Decision #20) | Agreed — StandardScaler is sufficient. Adding a `FunctionTransformer(np.log1p)` step would add complexity with no measurable gain given the model set. |
 | Post-preprocessing checks (new in v3) | Agent added Cell 6 with 4 checks: row counts match y splits, no NaNs, feature count, handle_unknown test with unseen "Atlantis" (Log #25, Decision #26) | I revised Cell 6 for conciseness (Decision #31): replaced print-only checks with `assert` statements, replaced "Atlantis" handle_unknown test with OHE `.categories_` inspection (more informative — shows actual learned levels), and added a 3-row `display()` preview. All 4 checks pass. |
 | Draft structure | Agent initially used three-part layout (Log #21, #23); later interleaved report text under each cell (Log #24, Decision #25) | I requested interleaved layout so the document reads top-to-bottom |
