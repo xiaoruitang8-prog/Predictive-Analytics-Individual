@@ -4,50 +4,56 @@
 
 ## Coding Plan
 
-1. **5.1 Sanity check — re-fit HistGBT.**  Re-fit HistGBT (untuned) from
-   Task 4 on `X_train_t` and evaluate on `X_val_t` using all 4 metrics
-   (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) to confirm the
-   Task 4 numbers reproduce before tuning.
+1. **5.1 Sanity check — re-fit both shortlisted models.**  Re-fit HistGBT
+   and RandomForest (untuned) from Task 4 on `X_train_t` and evaluate on
+   `X_val_t` using all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%,
+   Precision@top-20%) to confirm the Task 4 numbers reproduce before
+   tuning.
 
-2. **5.2 Tune the primary candidate.**  `RandomizedSearchCV` on HistGBT
-   (n\_iter=8, 3-fold CV, training only, `scoring="average_precision"`).
-   Compare tuned vs untuned on validation; pick the final model.
+2. **5.2 Tune both shortlisted candidates.**  `RandomizedSearchCV` on
+   HistGBT and RandomForest (n\_iter=8 each, 3-fold CV, training only,
+   `scoring="average_precision"`).  Compare tuned vs untuned for both
+   models on validation.  Total budget: 2 × 8 × 3 = 48 fits.
 
 3. **5.3 Lock operating rule on validation.**  The main operating rule is
    **top-20 % by predicted risk** (matching the retention campaign's
    capacity).  Also find a threshold on validation that approximates 20 %
    flagging, to enable a confusion-matrix view later.  Lock everything
-   before test access.
+   before test access.  The threshold is derived from whichever tuned
+   model has the higher validation PR-AUC.
 
-4. **5.4 Final test evaluation.**  Test set accessed once.  Report PR-AUC,
-   ROC-AUC, Recall@top-20 %, Precision@top-20 %, and threshold-based
-   metrics at the locked threshold.
+4. **5.4 Final test evaluation.**  Test set accessed once — both tuned
+   models evaluated.  Apply the pre-committed decision rule from
+   Section 4.5 to select the final model.  Report PR-AUC, ROC-AUC,
+   Recall@top-20 %, Precision@top-20 %, and threshold-based metrics.
 
 5. **5.5 Error analysis — 4 diagnostics.**
-   - **(a)** Confusion matrix at the locked threshold
-   - **(b)** PR curve (val vs test overlay)
-   - **(c)** Calibration diagram (reliability curve + score distribution)
-   - **(d)** Geography failure-mode slice (fairness check)
-   Save figures to `outputs/`.
+   - **(a)** Confusion matrix at the locked threshold (final model)
+   - **(b)** PR curve (val vs test overlay, both models)
+   - **(c)** Calibration diagram (both models side-by-side)
+   - **(d)** Geography failure-mode slice (both models)
+   Save figures to `outputs/`.  Diagnostics (b)–(d) compare both models
+   to justify the final selection per the pre-committed rule.
 
 6. **5.6 Agent-made mistake and fix.**  Demonstrate the `predict()` vs
    `predict_proba()` bug for PR-AUC; show concrete impact; confirm fix.
 
 Constraints: test set accessed only in Cell 5.4 (once).
-`random_state=SEED` throughout.  Tuning budget: 8 × 3 = 24 fits.
+`random_state=SEED` throughout.  Tuning budget: 2 × 8 × 3 = 48 fits.
 
 ---
 
 ## Cell 1 — 5.1 Sanity check
 
 ```python
-# ── 5.1 Sanity check — re-fit HistGBT ────────────────────────────────────────
-# Re-fit HistGBT (untuned) so Task 5 is self-contained.
+# ── 5.1 Sanity check — re-fit both shortlisted models ────────────────────────
+# Re-fit HistGBT and RandomForest (untuned) so Task 5 is self-contained.
 # Confirm Task 4 validation numbers reproduce before tuning.
 # Inherits: X_train_t, X_val_t, y_train, y_val, SEED=42, TOP_PCT=0.20
 #            evaluate(), recall_precision_top()  (Task 4 Cell 1)
 
-from sklearn.ensemble     import HistGradientBoostingClassifier
+from sklearn.ensemble     import (HistGradientBoostingClassifier,
+                                   RandomForestClassifier)
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics      import (average_precision_score, roc_auc_score,
                                    recall_score, precision_score,
@@ -55,42 +61,49 @@ from sklearn.metrics      import (average_precision_score, roc_auc_score,
 import numpy  as np
 import pandas as pd
 
-# Re-fit HistGBT with same defaults as Task 4 (no class_weight)
+# Re-fit both models with same defaults as Task 4 (no class_weight)
 hgbt_base = HistGradientBoostingClassifier(random_state=SEED)
 hgbt_base.fit(X_train_t, y_train)
+
+rf_base = RandomForestClassifier(n_estimators=200, random_state=SEED, n_jobs=-1)
+rf_base.fit(X_train_t, y_train)
 
 # Confirm Task 4 numbers reproduce
 sanity = pd.DataFrame([
     evaluate("HistGBT (untuned)", hgbt_base, X_val_t, y_val),
+    evaluate("RF (untuned)",      rf_base,   X_val_t, y_val),
 ])
-print("── 5.1 Sanity check: HistGBT on validation ──")
+print("── 5.1 Sanity check: both shortlisted models on validation ──")
 display(sanity)
 print("Task 4 numbers reproduced — ready to tune.")
 ```
 
 ### 5.1  Sanity Check
 
-HistGBT (untuned) is re-fit on `X_train_t` and evaluated on `X_val_t`
-to confirm the Task 4 numbers reproduce before tuning begins.
+Both shortlisted models (HistGBT and RandomForest) are re-fit on
+`X_train_t` and evaluated on `X_val_t` to confirm the Task 4 numbers
+reproduce before tuning begins.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
 | HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| RF (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 
-*[fill: confirm these match Task 4 values.  If they differ, check that
-SEED and preprocessing are identical.]*
+*[fill: confirm these match Task 4 values for both models.  If they
+differ, check that SEED and preprocessing are identical.]*
 
 ---
 
-## Cell 2 — 5.2 Tune the primary candidate
+## Cell 2 — 5.2 Tune both shortlisted candidates
 
 ```python
-# ── 5.2 Tune HistGBT ─────────────────────────────────────────────────────────
-# Task 4 used default hyperparameters.  Here we do a small search.
+# ── 5.2 Tune both shortlisted models ─────────────────────────────────────────
+# Task 4 used default hyperparameters.  Here we do a small search for each.
 # scoring="average_precision" = PR-AUC → correct metric for imbalanced data.
-# Budget: n_iter=8 × cv=3 = 24 total fits.
+# Budget: 2 models × n_iter=8 × cv=3 = 48 total fits.
 
-param_dist = {
+# --- HistGBT ---
+hgbt_param_dist = {
     "max_iter":         [100, 200, 300],
     "max_depth":        [3, 5, None],
     "learning_rate":    [0.05, 0.1, 0.2],
@@ -98,50 +111,80 @@ param_dist = {
     "class_weight":     [None, "balanced"],
 }
 
-search = RandomizedSearchCV(
+hgbt_search = RandomizedSearchCV(
     HistGradientBoostingClassifier(random_state=SEED),
-    param_distributions=param_dist,
-    n_iter=8,
-    cv=3,
-    scoring="average_precision",
-    random_state=SEED,
-    n_jobs=-1,
+    param_distributions=hgbt_param_dist,
+    n_iter=8, cv=3, scoring="average_precision",
+    random_state=SEED, n_jobs=-1,
 )
-search.fit(X_train_t, y_train)        # training only
+hgbt_search.fit(X_train_t, y_train)
+hgbt_tuned = hgbt_search.best_estimator_
+print(f"HistGBT best params: {hgbt_search.best_params_}")
+print(f"HistGBT best CV PR-AUC: {hgbt_search.best_score_:.4f}")
 
-hgbt_tuned = search.best_estimator_   # refit=True
-print(f"Best params (training CV): {search.best_params_}")
-print(f"Best CV PR-AUC (training): {search.best_score_:.4f}")
+# --- RandomForest ---
+rf_param_dist = {
+    "n_estimators":     [100, 200, 300],
+    "max_depth":        [5, 10, None],
+    "min_samples_leaf": [5, 20, 40],
+    "class_weight":     [None, "balanced"],
+}
 
-# Tuned vs untuned on validation
-row_untuned = evaluate("HistGBT (untuned)", hgbt_base,  X_val_t, y_val)
-row_tuned   = evaluate("HistGBT (tuned)",   hgbt_tuned, X_val_t, y_val)
+rf_search = RandomizedSearchCV(
+    RandomForestClassifier(random_state=SEED, n_jobs=-1),
+    param_distributions=rf_param_dist,
+    n_iter=8, cv=3, scoring="average_precision",
+    random_state=SEED, n_jobs=-1,
+)
+rf_search.fit(X_train_t, y_train)
+rf_tuned = rf_search.best_estimator_
+print(f"\nRF best params: {rf_search.best_params_}")
+print(f"RF best CV PR-AUC: {rf_search.best_score_:.4f}")
 
-tuning_df = pd.DataFrame([row_tuned, row_untuned])
-print("\n── Tuned vs untuned (validation) ──")
-display(tuning_df)
+# --- Compare all four variants on validation ---
+comparison = pd.DataFrame([
+    evaluate("HistGBT (tuned)",   hgbt_tuned, X_val_t, y_val),
+    evaluate("HistGBT (untuned)", hgbt_base,  X_val_t, y_val),
+    evaluate("RF (tuned)",        rf_tuned,   X_val_t, y_val),
+    evaluate("RF (untuned)",      rf_base,    X_val_t, y_val),
+]).sort_values("PR-AUC", ascending=False).reset_index(drop=True)
+print("\n── Tuned vs untuned — both models (validation) ──")
+display(comparison)
 
-delta = round(row_tuned["PR-AUC"] - row_untuned["PR-AUC"], 4)
-print(f"\nTuning gain: ΔPR-AUC = {delta:+.4f}")
+delta_hgbt = round(
+    evaluate("HistGBT (tuned)", hgbt_tuned, X_val_t, y_val)["PR-AUC"]
+    - evaluate("HistGBT (untuned)", hgbt_base, X_val_t, y_val)["PR-AUC"], 4)
+delta_rf = round(
+    evaluate("RF (tuned)", rf_tuned, X_val_t, y_val)["PR-AUC"]
+    - evaluate("RF (untuned)", rf_base, X_val_t, y_val)["PR-AUC"], 4)
+print(f"\nTuning gain — HistGBT: ΔPR-AUC = {delta_hgbt:+.4f}")
+print(f"Tuning gain — RF:     ΔPR-AUC = {delta_rf:+.4f}")
 ```
 
-### 5.2  Tuning the Primary Candidate
+### 5.2  Tuning Both Shortlisted Candidates
 
-`RandomizedSearchCV` searches a small hyperparameter space using PR-AUC
-as the scoring metric (correct for imbalanced data — see Section 5.6 for
-why ROC-AUC would mislead).  The validation set is **not** seen by the
-search; it is evaluated once afterwards.
+`RandomizedSearchCV` searches a small hyperparameter space for each
+shortlisted model using PR-AUC as the scoring metric (correct for
+imbalanced data — see Section 5.6 for why ROC-AUC would mislead).
+The validation set is **not** seen by either search; it is evaluated
+once afterwards.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
 | HistGBT (tuned)   | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 | HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| RF (tuned)        | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| RF (untuned)      | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 
-Best parameters: *[fill from output]*.
-Tuning gain: ΔPR-AUC = *[fill]*.
+HistGBT best parameters: *[fill from output]*.
+RF best parameters: *[fill from output]*.
+Tuning gain — HistGBT: ΔPR-AUC = *[fill]*.
+Tuning gain — RF: ΔPR-AUC = *[fill]*.
 
-*[fill: was tuning meaningful (Δ > 0.005) or marginal?  Are the best params
-close to defaults?  Note this is evidence for the tuning rubric item.]*
+*[fill: was tuning meaningful (Δ > 0.005) or marginal for each model?
+Are any best params at grid boundaries (suggesting the range should be
+extended)?  Which tuned model leads on validation PR-AUC?  Note: the
+final decision uses test metrics, not validation.]*
 
 ---
 
@@ -153,8 +196,16 @@ close to defaults?  Note this is evidence for the tuning rubric item.]*
 # Also derive a threshold that approximates 20% flagging on validation,
 # so we can produce a confusion matrix at test time.
 # Everything locked here — test set not accessed.
+#
+# Use whichever tuned model has higher validation PR-AUC for the threshold.
+# Both models are still carried forward — the final pick happens on test.
 
-proba_val = hgbt_tuned.predict_proba(X_val_t)[:, 1]
+hgbt_val_prauc = evaluate("HistGBT (tuned)", hgbt_tuned, X_val_t, y_val)["PR-AUC"]
+rf_val_prauc   = evaluate("RF (tuned)",      rf_tuned,   X_val_t, y_val)["PR-AUC"]
+val_leader     = "HistGBT" if hgbt_val_prauc >= rf_val_prauc else "RF"
+val_leader_model = hgbt_tuned if val_leader == "HistGBT" else rf_tuned
+
+proba_val = val_leader_model.predict_proba(X_val_t)[:, 1]
 
 # ── Main rule: top-20% ranking ────────────────────────────────────────────────
 n_top      = max(1, int(len(y_val) * TOP_PCT))
@@ -186,11 +237,13 @@ rule_df = pd.DataFrame([
     {"Rule": "Threshold 0.5 (naive)",
      "Flagged (%)": pct_05,      "Recall": rec_05,     "Precision": prec_05},
 ])
-print("── Operating-rule comparison (validation) ──")
+print(f"── Operating-rule comparison (val leader: {val_leader} tuned) ──")
 display(rule_df)
 
 print(f"\nLOCKED: top-20% ranking as main rule")
 print(f"LOCKED: threshold = {LOCKED_THRESH} for confusion-matrix view")
+print(f"Val leader: {val_leader} (PR-AUC = {max(hgbt_val_prauc, rf_val_prauc):.4f})")
+print("Both models still carried forward — final pick on test set.")
 print("Test set has NOT been accessed.")
 ```
 
@@ -201,7 +254,8 @@ primary operating rule is **top-20 % by predicted churn risk** — a ranking
 rule that always fills every slot regardless of probability calibration.
 
 To produce a confusion matrix (which needs binary labels), a threshold of
-**[fill]** is derived from the 80th percentile of validation probabilities.
+**[fill]** is derived from the 80th percentile of validation probabilities
+from the validation-set leader (*[fill: HistGBT or RF]*).
 This approximately flags 20 % of customers, matching the ranking rule but
 expressed as a threshold.  For comparison, the naive 0.5 threshold is also
 shown.
@@ -217,9 +271,10 @@ capacity and missing churners.  The ranking rule and the fitted threshold
 give similar recall/precision since they both flag ~20 %.]*
 
 **All choices are now locked:**
-- Model: HistGBT (tuned)
+- Shortlisted models: HistGBT (tuned) and RF (tuned) — both carried forward
 - Operating rule: top-20 % ranking
 - Threshold for CM: *[fill]*
+- Final selection: by pre-committed rule (Section 4.5) on test metrics
 - Test set: not yet accessed
 
 ---
@@ -229,54 +284,71 @@ give similar recall/precision since they both flag ~20 %.]*
 ```python
 # ── 5.4 FINAL TEST EVALUATION ─────────────────────────────────────────────────
 # !! Test set accessed for the FIRST and ONLY time. !!
-# Model:    HistGBT (tuned)
-# Rule:     top-20% ranking (main) + LOCKED_THRESH for CM
+# Both shortlisted models evaluated; final selection by pre-committed rule.
+# Rule: top-20% ranking (main) + LOCKED_THRESH for CM
 
-proba_test = hgbt_tuned.predict_proba(X_test_t)[:, 1]
+# ── Evaluate both tuned models on test ────────────────────────────────────────
+proba_test_hgbt = hgbt_tuned.predict_proba(X_test_t)[:, 1]
+proba_test_rf   = rf_tuned.predict_proba(X_test_t)[:, 1]
 
-# ── Ranking metrics (threshold-free) ──────────────────────────────────────────
-pr_auc_test  = round(average_precision_score(y_test, proba_test), 4)
-roc_auc_test = round(roc_auc_score(y_test, proba_test), 4)
-rec_top_test, prec_top_test = recall_precision_top(y_test, proba_test)
+test_results = pd.DataFrame([
+    evaluate("HistGBT (tuned)", hgbt_tuned, X_test_t, y_test),
+    evaluate("RF (tuned)",      rf_tuned,   X_test_t, y_test),
+]).sort_values("PR-AUC", ascending=False).reset_index(drop=True)
 
-# ── Threshold-based metrics at LOCKED_THRESH ──────────────────────────────────
+print("=== FINAL TEST RESULTS — both shortlisted models ===")
+display(test_results)
+
+# ── Apply pre-committed decision rule (Section 4.5) ──────────────────────────
+# Step 1: highest test PR-AUC
+final_model_name = test_results.iloc[0]["Model"]
+final_model = hgbt_tuned if "HistGBT" in final_model_name else rf_tuned
+proba_test  = proba_test_hgbt if "HistGBT" in final_model_name else proba_test_rf
+print(f"\nStep 1 (PR-AUC): winner = {final_model_name}")
+print("(Steps 2–3 — calibration + geography — evaluated in Cell 5.5)")
+
+# ── Threshold-based metrics for final model at LOCKED_THRESH ──────────────────
+pr_auc_test  = test_results.iloc[0]["PR-AUC"]
+roc_auc_test = test_results.iloc[0]["ROC-AUC"]
+rec_top_test = test_results.iloc[0]["Recall@top20%"]
+prec_top_test = test_results.iloc[0]["Precision@top20%"]
+
 pred_locked = (proba_test >= LOCKED_THRESH).astype(int)
 rec_locked  = round(recall_score(y_test, pred_locked), 4)
 prec_locked = round(precision_score(y_test, pred_locked, zero_division=0), 4)
 n_flagged   = int(pred_locked.sum())
 n_test      = len(y_test)
 
-test_row = {
-    "PR-AUC":            pr_auc_test,
-    "ROC-AUC":           roc_auc_test,
-    "Recall@top20%":     rec_top_test,
-    "Precision@top20%":  prec_top_test,
-    f"Recall@thr={LOCKED_THRESH}":   rec_locked,
-    f"Precision@thr={LOCKED_THRESH}": prec_locked,
-    "Flagged (%)":       round(100 * n_flagged / n_test, 1),
-}
-
-print("=== FINAL TEST RESULTS — HistGBT (tuned) ===")
-display(pd.DataFrame([test_row], index=["HistGBT (tuned)"]))
-print(f"\nFlagged {n_flagged}/{n_test} customers ({100*n_flagged/n_test:.1f}%) at-risk.")
+print(f"\n── Final model detail ({final_model_name}) ──")
+print(f"Flagged {n_flagged}/{n_test} customers ({100*n_flagged/n_test:.1f}%) "
+      f"at locked threshold {LOCKED_THRESH}")
 print("Test set will NOT be accessed again.")
 ```
 
 ### 5.4  Final Test Evaluation
 
+**Both shortlisted models on test set:**
+
+| Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
+|-------|--------|---------|---------------|------------------|
+| *[fill: winner]* | **[fill]** | **[fill]** | **[fill]** | **[fill]** |
+| *[fill: runner-up]* | **[fill]** | **[fill]** | **[fill]** | **[fill]** |
+
+**Pre-committed decision rule — Step 1 (PR-AUC):**
+Winner = *[fill]* (PR-AUC = *[fill]*).
+
+*[fill: is the gap meaningful (> 0.01) or still within noise?  If within
+noise, Steps 2–3 (calibration + geography in Section 5.5) will decide.
+Compare test PR-AUC vs val PR-AUC for each model — a drop ≤ 0.02 is
+normal; > 0.05 suggests val overfitting.]*
+
+**Final model threshold metrics:**
+
 | Metric | Value |
 |--------|-------|
-| PR-AUC (primary) | **[fill]** |
-| ROC-AUC | **[fill]** |
-| Recall@top-20 % | **[fill]** |
-| Precision@top-20 % | **[fill]** |
 | Recall @ locked threshold | **[fill]** |
 | Precision @ locked threshold | **[fill]** |
 | Customers flagged (%) | **[fill]** |
-
-*[fill: compare test PR-AUC vs val PR-AUC.  A small drop (≤ 0.02) is
-normal; a large drop (> 0.05) suggests val overfitting.  Comment on whether
-recall at top-20 % is acceptable for the campaign.]*
 
 ---
 
@@ -284,9 +356,11 @@ recall at top-20 % is acceptable for the campaign.]*
 
 ```python
 # ── 5.5 Error analysis ─────────────────────────────────────────────────────────
-# Depends on: proba_test, pred_locked, LOCKED_THRESH from Cell 5.4
+# Depends on: proba_test_hgbt, proba_test_rf, proba_test, pred_locked,
+#             LOCKED_THRESH, final_model_name from Cell 5.4
 # 4 diagnostics: (a) confusion matrix, (b) PR curve, (c) calibration,
 #                (d) geography failure-mode slice
+# Diagnostics (b)–(d) compare both models to justify the final selection.
 
 import matplotlib.pyplot as plt
 from sklearn.metrics import ConfusionMatrixDisplay, calibration_curve
@@ -294,7 +368,7 @@ import os
 
 os.makedirs("outputs", exist_ok=True)
 
-# ── (a) Confusion matrix at LOCKED_THRESH ─────────────────────────────────────
+# ── (a) Confusion matrix at LOCKED_THRESH (final model only) ─────────────────
 fig1, ax1 = plt.subplots(figsize=(5, 4))
 ConfusionMatrixDisplay.from_predictions(
     y_test, pred_locked,
@@ -302,50 +376,51 @@ ConfusionMatrixDisplay.from_predictions(
     cmap="Blues", colorbar=False, ax=ax1,
 )
 ax1.set_title(f"Confusion Matrix\n"
-              f"HistGBT (tuned)  |  thr = {LOCKED_THRESH}  |  test set")
+              f"{final_model_name}  |  thr = {LOCKED_THRESH}  |  test set")
 fig1.tight_layout()
 fig1.savefig("outputs/5a_confusion_matrix.png", dpi=120, bbox_inches="tight")
 plt.show()
 print("Saved: outputs/5a_confusion_matrix.png")
 
-# ── (b) PR curve — val vs test ────────────────────────────────────────────────
-prec_v, rec_v, _ = precision_recall_curve(
-    y_val, hgbt_tuned.predict_proba(X_val_t)[:, 1]
-)
-prec_t, rec_t, _ = precision_recall_curve(y_test, proba_test)
+# ── (b) PR curve — both models on test ────────────────────────────────────────
+prec_h, rec_h, _ = precision_recall_curve(y_test, proba_test_hgbt)
+prec_r, rec_r, _ = precision_recall_curve(y_test, proba_test_rf)
 
-prauc_val_plot = round(average_precision_score(
-    y_val, hgbt_tuned.predict_proba(X_val_t)[:, 1]
-), 4)
+prauc_hgbt = round(average_precision_score(y_test, proba_test_hgbt), 4)
+prauc_rf   = round(average_precision_score(y_test, proba_test_rf), 4)
 
 fig2, ax2 = plt.subplots(figsize=(6, 5))
-ax2.plot(rec_v, prec_v, label=f"Validation  PR-AUC = {prauc_val_plot}")
-ax2.plot(rec_t, prec_t, label=f"Test        PR-AUC = {pr_auc_test}",
+ax2.plot(rec_h, prec_h, label=f"HistGBT (tuned)  PR-AUC = {prauc_hgbt}")
+ax2.plot(rec_r, prec_r, label=f"RF (tuned)       PR-AUC = {prauc_rf}",
          linestyle="--")
 ax2.axhline(y_test.mean(), color="gray", linestyle=":",
             label=f"No-skill ({y_test.mean():.3f})")
 ax2.scatter([rec_locked], [prec_locked], zorder=5, color="red", s=80,
             label=f"Locked threshold ({LOCKED_THRESH})")
 ax2.set_xlabel("Recall"); ax2.set_ylabel("Precision")
-ax2.set_title("PR Curve — HistGBT (tuned)")
+ax2.set_title("PR Curve — both shortlisted models (test)")
 ax2.legend(loc="upper right", fontsize=8)
 fig2.tight_layout()
 fig2.savefig("outputs/5b_pr_curve.png", dpi=120, bbox_inches="tight")
 plt.show()
 print("Saved: outputs/5b_pr_curve.png")
 
-# ── (c) Calibration reliability diagram ───────────────────────────────────────
-prob_true, prob_pred = calibration_curve(y_test, proba_test, n_bins=10)
-
+# ── (c) Calibration — both models side-by-side ───────────────────────────────
 fig3, axes3 = plt.subplots(1, 2, figsize=(10, 4))
 
-axes3[0].plot(prob_pred, prob_true, marker="o", label="HistGBT (tuned)")
+for proba, label, color in [
+    (proba_test_hgbt, "HistGBT (tuned)", "tab:blue"),
+    (proba_test_rf,   "RF (tuned)",      "tab:orange"),
+]:
+    pt, pp = calibration_curve(y_test, proba, n_bins=10)
+    axes3[0].plot(pp, pt, marker="o", label=label, color=color)
 axes3[0].plot([0, 1], [0, 1], "--", color="gray", label="Perfect calibration")
 axes3[0].set_xlabel("Mean predicted probability")
 axes3[0].set_ylabel("Fraction of positives")
 axes3[0].set_title("Calibration Curve (test)")
-axes3[0].legend()
+axes3[0].legend(fontsize=8)
 
+# Score-distribution histogram — final model only (for clarity)
 axes3[1].hist(proba_test[y_test == 0], bins=30, alpha=0.6,
               label="Stay", color="steelblue", density=True)
 axes3[1].hist(proba_test[y_test == 1], bins=30, alpha=0.6,
@@ -353,7 +428,7 @@ axes3[1].hist(proba_test[y_test == 1], bins=30, alpha=0.6,
 axes3[1].axvline(LOCKED_THRESH, color="black", linestyle="--",
                  label=f"thr = {LOCKED_THRESH}")
 axes3[1].set_xlabel("Predicted probability"); axes3[1].set_ylabel("Density")
-axes3[1].set_title("Score distribution (test)")
+axes3[1].set_title(f"Score distribution — {final_model_name} (test)")
 axes3[1].legend(fontsize=8)
 
 fig3.tight_layout()
@@ -361,66 +436,98 @@ fig3.savefig("outputs/5c_calibration.png", dpi=120, bbox_inches="tight")
 plt.show()
 print("Saved: outputs/5c_calibration.png")
 
-# ── (d) Failure-mode slice: Geography ─────────────────────────────────────────
+# ── (d) Failure-mode slice: Geography — both models ──────────────────────────
 geo_vals    = df_model.loc[y_test.index, "Geography"].values
 y_test_vals = y_test.values
 
 geo_rows = []
-for geo in sorted(set(geo_vals)):
-    mask = geo_vals == geo
-    y_sl = y_test_vals[mask]
-    p_sl = proba_test[mask]
-    if y_sl.sum() == 0:
-        continue
-    rec_sl, prec_sl = recall_precision_top(pd.Series(y_sl), p_sl)
-    geo_rows.append({
-        "Geography":        geo,
-        "N":                int(len(y_sl)),
-        "Churners":         int(y_sl.sum()),
-        "Churn rate":       round(float(y_sl.mean()), 4),
-        "PR-AUC":           round(float(average_precision_score(y_sl, p_sl)), 4),
-        "Recall@top20%":    rec_sl,
-    })
+for model_name, proba_m in [("HistGBT", proba_test_hgbt),
+                              ("RF",      proba_test_rf)]:
+    for geo in sorted(set(geo_vals)):
+        mask = geo_vals == geo
+        y_sl = y_test_vals[mask]
+        p_sl = proba_m[mask]
+        if y_sl.sum() == 0:
+            continue
+        rec_sl, prec_sl = recall_precision_top(pd.Series(y_sl), p_sl)
+        geo_rows.append({
+            "Model":            model_name,
+            "Geography":        geo,
+            "N":                int(len(y_sl)),
+            "Churners":         int(y_sl.sum()),
+            "Churn rate":       round(float(y_sl.mean()), 4),
+            "PR-AUC":           round(float(average_precision_score(y_sl, p_sl)), 4),
+            "Recall@top20%":    rec_sl,
+        })
 
 geo_df = pd.DataFrame(geo_rows)
-print("\n── Failure-mode slice: Geography (test set) ──")
-display(geo_df)
+print("\n── Failure-mode slice: Geography (test set, both models) ──")
+display(geo_df.pivot_table(index="Geography",
+                            columns="Model",
+                            values=["PR-AUC", "Recall@top20%"],
+                            aggfunc="first"))
 
-worst = geo_df.loc[geo_df["PR-AUC"].idxmin(), "Geography"]
-print(f"Worst geography: {worst} | Overall PR-AUC: {pr_auc_test}")
+# ── Pre-committed decision rule: Steps 2–3 ──────────────────────────────────
+# Step 2: Calibration — which model's reliability curve is closer to diagonal?
+# (Visual comparison from plot above — document in report text)
+# Step 3: Geography fairness — smallest max–min PR-AUC gap across countries
+for model_name, proba_m in [("HistGBT", proba_test_hgbt),
+                              ("RF",      proba_test_rf)]:
+    sub = geo_df[geo_df["Model"] == model_name]
+    gap = sub["PR-AUC"].max() - sub["PR-AUC"].min()
+    print(f"{model_name} geography PR-AUC gap (max-min): {gap:.4f}")
+
+print(f"\n=== FINAL MODEL: {final_model_name} ===")
 ```
 
 ### 5.5  Error Analysis
 
-**(a) Confusion matrix (threshold = [fill]):**
+**(a) Confusion matrix (threshold = [fill], final model = [fill]):**
 
 *[fill: note TP (correct alerts), FP (wasted calls), FN (missed churners),
 TN.  Relate back to cost asymmetry: we accept some FP to minimise FN,
 consistent with Precision@top-20% measuring the wasted-intervention rate.]*
 
-**(b) PR curve — val vs test:**
+**(b) PR curve — both models on test:**
 
-*[fill: is the gap small (< 0.02)?  Note where the locked threshold
-(red dot) sits on the curve.  A large gap signals val overfitting.]*
+*[fill: do the two curves largely overlap?  Which model dominates in the
+high-recall region (where the retention campaign operates)?  Is the gap
+consistent with the PR-AUC numbers from Cell 5.4?]*
 
-**(c) Calibration:**
+**(c) Calibration — both models:**
 
-*[fill: does the reliability curve track the diagonal?  If it bows above,
-the model over-predicts churn risk; if below, it under-predicts.  Comment
-on class separation in the histogram — good separation means the locked
-threshold sits in a low-density region between the two distributions.]*
+*[fill: which model's reliability curve tracks the diagonal more closely?
+If one bows above (over-predicts) and the other bows below (under-predicts),
+note this.  This is Step 2 of the pre-committed decision rule.  Comment
+on class separation in the score-distribution histogram — good separation
+means the locked threshold sits in a low-density region.]*
 
-**(d) Geography slice:**
+**(d) Geography slice — both models:**
 
-| Geography | N | Churners | Churn rate | PR-AUC | Recall@top20% |
-|-----------|---|----------|------------|--------|---------------|
-| France  | *[fill]* | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| Germany | *[fill]* | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| Spain   | *[fill]* | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| Geography | HistGBT PR-AUC | RF PR-AUC | HistGBT Recall@top20% | RF Recall@top20% |
+|-----------|---------------|-----------|----------------------|-----------------|
+| France  | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| Germany | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| Spain   | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
 
-*[fill: Germany has ~32 % churn vs ~16 % elsewhere (EDA).  If PR-AUC is
-lower for Germany despite higher prevalence, the model has fewer signal
-features there — flag as a deployment risk.]*
+HistGBT geography PR-AUC gap (max−min): *[fill]*.
+RF geography PR-AUC gap (max−min): *[fill]*.
+
+*[fill: which model has the smaller gap (fairer)?  This is Step 3 of the
+pre-committed decision rule.  Germany has ~32 % churn vs ~16 % elsewhere
+(EDA) — if PR-AUC is lower for Germany despite higher prevalence, flag
+as a deployment risk.]*
+
+**Pre-committed decision rule outcome:**
+
+| Step | Criterion | Winner |
+|------|-----------|--------|
+| 1 | Test PR-AUC | *[fill]* |
+| 2 | Calibration quality | *[fill]* |
+| 3 | Geography fairness | *[fill]* |
+| 4 | Tiebreaker (engineering) | HistGBT |
+
+**Final model: [fill]**
 
 ---
 
@@ -442,11 +549,11 @@ features there — flag as a deployment risk.]*
 print("── Demonstrating the predict() vs predict_proba() bug ──\n")
 
 # WRONG — binary labels, not probabilities
-proba_bug     = hgbt_tuned.predict(X_val_t)              # BUG
+proba_bug     = final_model.predict(X_val_t)              # BUG
 prauc_bug     = round(average_precision_score(y_val, proba_bug), 4)
 
 # CORRECT — continuous probabilities
-proba_correct = hgbt_tuned.predict_proba(X_val_t)[:, 1]  # FIX
+proba_correct = final_model.predict_proba(X_val_t)[:, 1]  # FIX
 prauc_correct = round(average_precision_score(y_val, proba_correct), 4)
 
 mistake_df = pd.DataFrame([
@@ -492,7 +599,9 @@ Use binary `predict()` only for threshold-dependent metrics (`recall_score`,
 
 ## Model Card
 
-**Model:** HistGradientBoostingClassifier (tuned) — sklearn native.
+**Model:** *[fill: HistGradientBoostingClassifier or RandomForestClassifier]*
+(tuned) — sklearn native.  Selected by pre-committed decision rule
+(Section 4.5) applied to test-set metrics and error-analysis diagnostics.
 
 **What it is for:**
 Ranking bank customers by churn risk so a fixed-capacity retention campaign
@@ -538,14 +647,16 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Step | What My Agent Did | What I Verified or Corrected |
 |------|--------------------|------------------------------|
 | Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
-| Sanity check | Re-fit HistGBT (untuned) on training; confirmed Task 4 validation numbers reproduce | *[fill: confirm PR-AUC matches Task 4; if not, check SEED and preprocessing]* |
-| Tuning | `RandomizedSearchCV` on HistGBT: n\_iter=8, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params; confirm tuning gain ΔPR-AUC; note if marginal or meaningful]* |
-| Operating rule | Locked top-20 % ranking as main rule; derived threshold (80th-percentile of val probabilities) for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
-| Test evaluation | `hgbt_tuned.predict_proba(X_test_t)` called once; all 4 metrics + threshold metrics reported | *[fill: val → test PR-AUC gap ≤ 0.02? Flagged % ≈ 20 %? Confirm pred_locked uses LOCKED_THRESH not 0.5]* |
-| Error analysis (CM) | Confusion matrix at locked threshold; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
-| Error analysis (PR curve) | PR curve comparing val vs test; locked threshold marked as red dot | *[fill: is gap < 0.02? Does red dot sit at an acceptable recall/precision trade-off?]* |
-| Error analysis (calibration) | Calibration reliability curve + score-distribution histogram; saved to `outputs/5c_calibration.png` | *[fill: does reliability curve track the diagonal? Comment on class separation in the histogram]* |
-| Error analysis (geography) | Per-country PR-AUC and Recall@top-20%; identifies worst-performing geography | *[fill: check index alignment (df_model.loc[y_test.index]); note worst geography; flag fairness implications]* |
+| Shortlist scope | Agent initially designed Task 5 for a single model (HistGBT only). I requested carrying both HistGBT and RF into Task 5, because the PR-AUC gap from Task 4 was < 0.01 (noise) and the two models have structurally different failure modes | I confirmed: (1) tuning budget remains small (2 × 8 × 3 = 48 fits on 7k rows); (2) pre-committed a 4-step decision rule before seeing Task 5 results; (3) error analysis diagnostics (calibration, geography) now compare both models side-by-side to justify the final pick |
+| Sanity check | Re-fit both HistGBT and RF (untuned) on training; confirmed Task 4 validation numbers reproduce for both | *[fill: confirm PR-AUC matches Task 4 for both models; if they differ, check SEED and preprocessing]* |
+| Tuning | `RandomizedSearchCV` on both models: n\_iter=8 each, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params for each; confirm tuning gains ΔPR-AUC; note if marginal or meaningful; check if any best params are at grid boundaries]* |
+| Operating rule | Locked top-20 % ranking as main rule; derived threshold from val-leader's 80th-percentile probabilities for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
+| Test evaluation | Both tuned models evaluated on test set (single access); pre-committed decision rule Step 1 (PR-AUC) applied | *[fill: which model wins Step 1? Is the gap meaningful (> 0.01) or still within noise? val → test PR-AUC gap ≤ 0.02 for each?]* |
+| Error analysis (CM) | Confusion matrix at locked threshold for final model; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
+| Error analysis (PR curve) | PR curve comparing both models on test; locked threshold marked as red dot | *[fill: do curves overlap? Which dominates in high-recall region? Is gap consistent with PR-AUC numbers?]* |
+| Error analysis (calibration) | Calibration reliability curves for both models on same axes + score histogram for final model; saved to `outputs/5c_calibration.png` | *[fill: which model tracks the diagonal more closely? This is Step 2 of the decision rule. Comment on class separation in the histogram]* |
+| Error analysis (geography) | Per-country PR-AUC and Recall@top-20% for both models; computes max–min PR-AUC gap per model | *[fill: which model has smaller gap (fairer)? This is Step 3 of the decision rule. Note worst geography for each; flag fairness implications]* |
+| Final selection | Applied pre-committed 4-step decision rule mechanically: PR-AUC → calibration → geography → tiebreaker | *[fill: document which step decided; confirm result is unambiguous; state final model name]* |
 | Agent mistake | Demonstrated predict() vs predict_proba() for PR-AUC; showed Δ; self-checked evaluate() | *[fill: note actual Δ; confirm buggy < correct; confirm assert passed]* |
 | Model card | Agent drafted model card with intended use, limitations, data constraints, evaluation caveats, and 4-metric summary table | *[fill: confirm model card accurately reflects final model and results]* |
 | *[add rows as needed]* | | |

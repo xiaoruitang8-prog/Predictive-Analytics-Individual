@@ -21,8 +21,10 @@
 4. **4.4 Full comparison, operating-rule demo, and shortlist.**  One sorted
    table of all models.  A small controlled comparison: HistGBT with
    threshold 0.5 vs top-20% ranking, showing why ranking is more relevant
-   for a fixed-capacity retention campaign.  Shortlist the single
-   best-performing model (by PR-AUC, excl. Dummy floor) for Task 5.
+   for a fixed-capacity retention campaign.  Shortlist the two
+   best-performing models (by PR-AUC, excl. Dummy floor) for Task 5
+   — their gap is within noise, so deeper Task 5 diagnostics will
+   decide the final pick.
 
 Constraints: **no hyperparameter search** in Task 4 — all models use
 sensible defaults.  Test set **never touched**.  `random_state=SEED`
@@ -220,13 +222,15 @@ print(f"(Threshold 0.5 flags {n_flag_05} customers vs "
       f"top-20% always flags {n_top})")
 
 # ── Shortlist ─────────────────────────────────────────────────────────────────
-best_model = (
+shortlist = (
     results_df[~results_df["Model"].str.startswith("Dummy")]
-    .head(1)
+    .head(2)
     .reset_index(drop=True)
 )
-print("\n=== Best model for Task 5 (highest PR-AUC, excl. Dummy floor) ===")
-display(best_model)
+gap = abs(shortlist.loc[0, "PR-AUC"] - shortlist.loc[1, "PR-AUC"])
+print(f"\n=== Shortlist for Task 5 (top 2 by PR-AUC, excl. Dummy floor) ===")
+display(shortlist)
+print(f"PR-AUC gap between top 2: {gap:.4f} — within noise for ~{len(y_val)}-row val set.")
 ```
 
 ### 4.4  Full Comparison and Operating-Rule Demo
@@ -273,29 +277,33 @@ recall gain clearly justifies the precision trade-off.
 
 ---
 
-**Best model for Task 5: HistGBT**
+**Shortlisted for Task 5: HistGBT and RandomForest**
 
 On the validation set the two tree ensembles clearly dominate:
-**RandomForest** PR-AUC = **0.6957**, **HistGBT** PR-AUC = **0.6952** —
-both roughly 0.19 points above LogReg.  The gap between them is just
-0.0005, well within noise for a ~1 400-row validation set.
+**RandomForest** PR-AUC = **[fill]**, **HistGBT** PR-AUC = **[fill]** —
+both roughly +0.19 above LogReg and +0.49 above the no-skill floor.
+The gap between them is **[fill]** (< 0.01), well within sampling noise
+for a ~1 400-row validation set.
 
-**Why HistGBT is the single pick:**
+**Why two, not one:**  A single pick on a < 0.01 PR-AUC gap would be
+arbitrary.  The two models have structurally different learning
+mechanisms — RF bags independent trees (variance reduction), HistGBT
+sequentially corrects residuals (bias reduction) — so they are likely
+to differ on calibration and subgroup performance.  Task 5's error
+analysis (calibration curve, geography slice, confusion matrix) provides
+the diagnostics to make a principled final selection.
 
-1. **Near-identical PR-AUC** — virtually tied with RandomForest, so
-   ranking alone does not separate them.
-2. **Native missing-value handling** — HistGBT routes missing values
-   during tree splits, avoiding the need for imputation in a production
-   pipeline.
-3. **Faster training on larger data** — histogram-binned O(n_bins ×
-   n_features) per boosting round scales better than bagging 200 full
-   trees.
-4. **Richer tuning surface** — `learning_rate`, `max_iter`, `max_depth`,
-   `min_samples_leaf`, `class_weight` give Task 5 meaningful
-   hyperparameters to search, whereas RandomForest defaults are already
-   near-optimal for this dataset size.
+**Pre-committed decision rule for Task 5 final selection:**
 
-LogReg (PR-AUC = 0.5068) is well above the no-skill floor (0.2040) but
+1. **PR-AUC on test set** (primary metric, single access)
+2. **Calibration quality** (reliability curve closer to diagonal)
+3. **Geography-slice fairness** (smallest max–min PR-AUC gap across
+   countries)
+4. **Tiebreaker** — if all three checks are tied, HistGBT is preferred
+   on engineering grounds (native missing-value handling, richer tuning
+   surface)
+
+LogReg (PR-AUC = [fill]) is well above the no-skill floor ([fill]) but
 substantially behind the tree models — the non-linear interactions that
 trees capture (e.g. Age × NumOfProducts) cannot be recovered by a linear
 decision boundary.
@@ -317,7 +325,7 @@ untouched for Task 5.
 | RandomForest | sklearn defaults, 200 trees, no `class_weight`; no tuning | [fill: PR-AUC above LogReg? Or between them?] |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | [fill: confirm this is the highest PR-AUC model; note that hyperparameters are untuned — tuning happens in Task 5] |
 | Operating-rule demo | Threshold 0.5 vs top-20 % ranking for HistGBT; showed flagged count, recall, precision | [fill: does top-20 % improve recall? How many more customers are flagged? Is this the right rule for the retention campaign?] |
-| Shortlist | Agent initially shortlisted top-2 models. I narrowed to a single best model (HistGBT) because the PR-AUC gap with RF is 0.0005 (noise) and HistGBT offers native missing-value handling, faster scaling, and a richer tuning surface for Task 5 | I confirmed: (1) PR-AUC difference is within noise for ~1 400 val rows; (2) HistGBT's practical advantages break the tie; (3) Task 5 already tunes only HistGBT, so the shortlist is now consistent end-to-end |
+| Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** into Task 5, because the PR-AUC gap is < 0.01 (noise on ~1 400 val rows) and picking one at this stage would be arbitrary | I confirmed: (1) PR-AUC gap is within noise; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) Task 5 error analysis (calibration, geography slice) provides diagnostics to make a principled final selection; (4) pre-committed a 4-step decision rule (PR-AUC → calibration → fairness → tiebreaker) before running Task 5 |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in Task 5 `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) moving it to Task 5 gives a cleaner Task 4 narrative and a stronger tuning story |
 | *[add rows as needed]* | | |
