@@ -392,7 +392,8 @@ would be test-based selection.]*
 # post-hoc consistency checks, NOT selection criteria.
 
 import matplotlib.pyplot as plt
-from sklearn.metrics import ConfusionMatrixDisplay, calibration_curve
+from sklearn.metrics     import ConfusionMatrixDisplay
+from sklearn.calibration import calibration_curve
 import os
 
 os.makedirs("outputs", exist_ok=True)
