@@ -506,49 +506,6 @@ unbiased estimates of real-world performance.
 
 ---
 
-## Model Card
-
-**Model:** HistGradientBoostingClassifier (tuned) — sklearn native.
-Selected on validation PR-AUC after tuning (Cell 5.3); test set used only
-for final reporting and diagnostics (Cells 5.4–5.5).
-
-**What it is for:**
-Ranking bank customers by churn risk so a fixed-capacity retention campaign
-(budget = 20 % of customer base) contacts the highest-risk individuals.
-
-**What it is NOT for:**
-- Individual causal explanations ("why did *this* customer churn?")
-- Real-time scoring at sub-millisecond latency
-- Predicting churn for products or populations outside the training data
-  distribution (different bank, different country mix, etc.)
-
-**Key metrics (test set):**
-
-| Metric | Value |
-|--------|-------|
-| PR-AUC | 0.7344 |
-| ROC-AUC | 0.8737 |
-| Recall@top-20% | 0.6426 |
-| Precision@top-20% | 0.6533 |
-
-**Data constraints:**
-- Trained on 10 000 customers from a single bank (Kaggle CC0 dataset)
-- Features: CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard,
-  IsActiveMember, EstimatedSalary, Geography, Gender
-- Temporal dimension absent — no time-series features, no concept drift
-  monitoring
-
-**Evaluation caveats:**
-- Validation and test sets are random stratified splits, not temporal
-  out-of-time holds — real-world performance may differ under distribution
-  shift
-- Geography slice (Section 5.5d) shows unequal recall across regions —
-  monitor Germany in production
-- If the model is used for threshold-based decisions rather than ranking,
-  periodic recalibration may be needed
-
----
-
 ## 5.7  My Agent vs My Verification
 
 | Step | What My Agent Did | What I Verified or Corrected |
