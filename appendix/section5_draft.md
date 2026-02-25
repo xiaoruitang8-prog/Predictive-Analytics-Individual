@@ -35,9 +35,6 @@
    Save figures to `outputs/`.  Diagnostics (b)–(d) compare both models
    to justify the final selection per the pre-committed rule.
 
-6. **5.6 Agent-made mistake and fix.**  Demonstrate the `predict()` vs
-   `predict_proba()` bug for PR-AUC; show concrete impact; confirm fix.
-
 Constraints: test is not used for tuning or model selection; it is
 accessed only after all choices are locked (Cell 5.3), for final
 evaluation (Cell 5.4) and diagnostics (Cell 5.5).
@@ -571,72 +568,6 @@ validation to avoid test-based selection.]*
 
 ---
 
-## Cell 6 — 5.6 Agent-made mistake and fix
-
-```python
-# ── 5.6 Agent-made mistake and fix ────────────────────────────────────────────
-#
-# Mistake: using model.predict() instead of model.predict_proba()[:, 1]
-#          when computing average_precision_score (PR-AUC).
-#
-# Why it happens: predict() returns binary 0/1 labels; the agent uses it
-#   in an ad-hoc metric call outside the evaluate() helper.
-#
-# Why it matters: average_precision_score with binary inputs collapses
-#   the PR curve to a single point → reported "PR-AUC" equals the
-#   precision at the default threshold, not the full area under the curve.
-
-print("── Demonstrating the predict() vs predict_proba() bug ──\n")
-
-# WRONG — binary labels, not probabilities
-proba_bug     = final_model.predict(X_val_t)              # BUG
-prauc_bug     = round(average_precision_score(y_val, proba_bug), 4)
-
-# CORRECT — continuous probabilities
-proba_correct = final_model.predict_proba(X_val_t)[:, 1]  # FIX
-prauc_correct = round(average_precision_score(y_val, proba_correct), 4)
-
-mistake_df = pd.DataFrame([
-    {"Method": "predict()       ← WRONG",  "PR-AUC": prauc_bug,
-     "Note": "single point, not area under curve"},
-    {"Method": "predict_proba() ← CORRECT", "PR-AUC": prauc_correct,
-     "Note": "full PR curve integrated"},
-])
-print(mistake_df.to_string(index=False))
-
-delta_bug = prauc_correct - prauc_bug
-print(f"\nBug understates PR-AUC by {delta_bug:.4f} points.")
-print("Fix: always use predict_proba(X)[:, 1] for threshold-free metrics.")
-
-# Self-check
-import inspect
-assert "predict_proba" in inspect.getsource(evaluate), \
-    "evaluate() must use predict_proba!"
-print("Self-check: evaluate() uses predict_proba() ✓")
-```
-
-### 5.6  Agent-made Mistake and Fix
-
-**Mistake:** The agent uses `model.predict()` (binary 0/1) instead of
-`model.predict_proba()[:, 1]` (continuous probabilities) when computing
-`average_precision_score`.
-
-**Impact:** With binary inputs, the PR curve collapses to one point.  The
-reported "PR-AUC" is just the precision at the default threshold — not the
-area under the full curve.  The drop is **[fill]** absolute points, enough
-to incorrectly rank or eliminate a model.
-
-**How I caught it:** The buggy number was suspiciously close to the churn
-prevalence (~0.20).  A quick `inspect.getsource(evaluate)` confirmed the
-helper uses `predict_proba` — so the ad-hoc call was inconsistent.
-
-**Fix:** Always pass `predict_proba(X)[:, 1]` to threshold-free metrics
-(`average_precision_score`, `roc_auc_score`, `precision_recall_curve`).
-Use binary `predict()` only for threshold-dependent metrics (`recall_score`,
-`precision_score`, `f1_score`).
-
----
-
 ## Model Card
 
 **Model:** *[fill: HistGradientBoostingClassifier or RandomForestClassifier]*
@@ -698,7 +629,6 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Error analysis (calibration) | Calibration reliability curves for both models on same axes + score histogram for final model; saved to `outputs/5c_calibration.png` | *[fill: which model tracks the diagonal more closely? This is Step 2 of the decision rule. Comment on class separation in the histogram]* |
 | Error analysis (geography) | Per-country PR-AUC and Recall@top-20% for both models; computes max–min PR-AUC gap per model | *[fill: which model has smaller gap (fairer)? This is Step 3 of the decision rule. Note worst geography for each; flag fairness implications]* |
 | Final selection | Final model locked on **validation** PR-AUC in Cell 5.3 (Step 1 of pre-committed rule). Steps 2–3 shown as post-hoc diagnostics on test in Cell 5.5 — they cannot override | *[fill: confirm Steps 2–3 are consistent with the locked choice; if they contradict, acknowledge transparently; state final model name]* |
-| Agent mistake | Demonstrated predict() vs predict_proba() for PR-AUC; showed Δ; self-checked evaluate() | *[fill: note actual Δ; confirm buggy < correct; confirm assert passed]* |
 | Model card | Agent drafted model card with intended use, limitations, data constraints, evaluation caveats, and 4-metric summary table | *[fill: confirm model card accurately reflects final model and results]* |
 | `calibration_curve` import error (Cell 5.5) | Agent wrote `from sklearn.metrics import ConfusionMatrixDisplay, calibration_curve` — importing `calibration_curve` from `sklearn.metrics`. This raises `ImportError` in recent sklearn versions because `calibration_curve` lives in `sklearn.calibration`, not `sklearn.metrics` | I caught the `ImportError` at runtime, identified the correct module (`sklearn.calibration`), and split the import into two lines: `from sklearn.metrics import ConfusionMatrixDisplay` and `from sklearn.calibration import calibration_curve`. Cell 5.5 now runs without error |
 | `MallocStackLogging` warnings (Cell 5.2) | Agent used `n_jobs=-1` in both `RandomizedSearchCV` calls, which spawns parallel worker processes via `joblib`. On macOS, each child process emits `MallocStackLogging: can't turn off malloc stack logging because it was not enabled` | I confirmed these are **harmless macOS system-level messages** — they do not affect tuning results, model parameters, or metrics. No code change needed. Setting `os.environ["MallocStackLogging"] = "0"` before the cell suppresses them cosmetically if desired |
