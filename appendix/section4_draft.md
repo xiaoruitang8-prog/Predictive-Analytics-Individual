@@ -20,14 +20,14 @@
 
 4. **4.4 Full comparison and shortlist.**  One sorted table of all models.
    Interpret all four metrics across architectures.  Shortlist the two
-   best-performing models (by PR-AUC, excl. Dummy floor) for Task 5
-   — their gap is within noise, so deeper Task 5 diagnostics will
+   best-performing models (by PR-AUC, excl. Dummy floor)
+   — their gap is within noise, so deeper diagnostics will
    decide the final pick.  The operating-rule comparison (ranking vs.
-   threshold 0.5) is deferred to Section 5.3.
+   threshold 0.5) is deferred to a later section.
 
 Constraints: **no hyperparameter search** in Task 4 — all models use
 sensible defaults.  Test set **never touched**.  `random_state=SEED`
-throughout.  Tuning is deferred entirely to Task 5.
+throughout.  Tuning is deferred to a subsequent task.
 
 ---
 
@@ -148,7 +148,7 @@ results.append(evaluate("RandomForest", rf, X_val_t, y_val))
 
 # 4. HistGradientBoosting — modern sklearn-native tabular model.
 #    Histogram-binned O(n) splits; handles missing values natively.
-#    All defaults (no class_weight) — tuning is deferred to Task 5.
+#    All defaults (no class_weight) — tuning is deferred.
 hgbt = HistGradientBoostingClassifier(
     random_state=SEED,
 )
@@ -164,10 +164,9 @@ display(pd.DataFrame(results[-2:]))
 **RandomForest** (200 trees, sklearn defaults) and
 **HistGradientBoosting** (sklearn-native histogram-based boosting,
 defaults) are both fitted on training data and evaluated on validation.
-All hyperparameters are untuned defaults; tuning is deferred to Task 5
-to keep this section a pure architecture comparison.  RF uses 200 trees
-(a standard default for stable probability estimates); Task 5 searches
-over [100, 200, 300] to verify this choice formally.
+All hyperparameters are untuned defaults; tuning is deferred to a later
+task to keep this section a pure architecture comparison.  RF uses 200
+trees — a standard default for stable probability estimates.
 
 Both tree ensembles leap well above the linear baseline on every metric.
 On PR-AUC — the primary measure of ranking quality across the full
@@ -215,7 +214,7 @@ shortlist = (
     .reset_index(drop=True)
 )
 gap = abs(shortlist.loc[0, "PR-AUC"] - shortlist.loc[1, "PR-AUC"])
-print(f"\n=== Shortlist for Task 5 (top 2 by PR-AUC, excl. Dummy floor) ===")
+print(f"\n=== Shortlist (top 2 by PR-AUC, excl. Dummy floor) ===")
 display(shortlist)
 print(f"PR-AUC gap between top 2: {gap:.4f} — within noise for ~{len(y_val)}-row val set.")
 ```
@@ -233,7 +232,7 @@ PR-AUC ≈ 0.20, ROC-AUC = 0.50):
 
 All models are evaluated under a top-20 % ranking rule, reflecting the
 campaign's fixed capacity; the formal operating-rule comparison
-(ranking vs. threshold 0.5) is deferred to Section 5.3.
+(ranking vs. threshold 0.5) is deferred to a later section.
 
 The table reveals a clear two-tier structure.  On the primary metric,
 PR-AUC, both tree ensembles (HistGBT 0.7252, RF 0.7042) sit roughly
@@ -272,19 +271,19 @@ such differences can easily be reversed by sampling noise.  Moreover,
 the two models learn differently — boosting reduces bias sequentially,
 while bagging reduces variance through parallel averaging — so they are
 likely to differ on calibration quality and subgroup performance in ways
-that PR-AUC alone cannot capture.  **Both are shortlisted for Task 5**,
-where tuning and error analysis (calibration curve, geography slice)
-will determine the final pick.  The decision criterion is pre-committed
-before running Task 5: highest validation PR-AUC after tuning.
+that PR-AUC alone cannot capture.  **Both are shortlisted for tuning**,
+where hyperparameter search and error analysis (calibration curve,
+geography slice) will determine the final pick.  The decision criterion
+is pre-committed: highest validation PR-AUC after tuning.
 
 ---
 
 ## 4.5  Shortlist Decision
 
-HistGBT and RandomForest are carried into Task 5.  The final model will
-be selected on **validation PR-AUC after tuning** — a criterion
-pre-committed before seeing Task 5 results.  Calibration and geography
-checks serve as post-decision diagnostics only (Section 5.5).
+HistGBT and RandomForest are carried forward for tuning.  The final
+model will be selected on **validation PR-AUC after tuning** — a
+criterion pre-committed before seeing tuning results.  Calibration and
+geography checks serve as post-decision diagnostics only.
 
 ---
 
@@ -298,9 +297,9 @@ checks serve as post-decision diagnostics only (Section 5.5).
 | Baseline (LogReg) | LogReg with default settings as linear baseline; confirms features carry signal above Dummy floor | PR-AUC = 0.5068 — sharp jump over Dummy (0.2040), confirming real signal exists. Establishes the linear ceiling that tree models must beat |
 | Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). Dummy (floor) → LogReg → RF + HistGBT gives a clean no-skill → linear → ensemble → boosting progression. Dummy is stated as the floor but hidden from comparison tables to keep them focused | All 4 models fit without error. PR-AUCs: Dummy 0.2040, LogReg 0.5068, RF 0.7042, HistGBT 0.7252 — all above the no-skill floor |
 | RandomForest | sklearn defaults, 200 trees, no `class_weight`; no tuning | PR-AUC = 0.7042 — well above LogReg (0.5068), +0.20 above the linear baseline. Second-best model |
-| HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | PR-AUC = 0.7252 — highest model, +0.021 above RF. Hyperparameters are untuned defaults; tuning deferred to Task 5 |
-| Operating-rule demo | Agent originally included a threshold-0.5 vs top-20 % comparison in Task 4. I moved it to Section 5.3, where it belongs — Task 4's role is architecture comparison, not operating-rule selection | Task 4.4 now contains a one-sentence deferral to Section 5.3. The full three-rule comparison (top-20 % ranking, threshold ≈ 20 %, threshold 0.5) with recall/precision numbers lives in Section 5.3 only |
-| Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** into Task 5, because the PR-AUC gap (0.0210) is small and the two models have structurally different failure modes | I confirmed: (1) HistGBT leads by 0.021 on validation — non-trivial but validation rankings don't always transfer to test; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) Task 5 error analysis (calibration, geography slice) provides diagnostics to confirm whether HistGBT's lead holds; (4) pre-committed validation PR-AUC as the sole decision criterion before running Task 5; calibration and geography checked as post-decision diagnostics |
-| No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
-| `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in Task 5 `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) moving it to Task 5 gives a cleaner Task 4 narrative and a stronger tuning story |
-| `n_estimators=200` | Agent set RF to 200 trees without formal justification beyond "stable probability estimates" | I verified: (1) 200 is a standard sklearn community default for medium-sized datasets; (2) Task 5 `param_dist` searches over `[100, 200, 300]`, so the choice is validated empirically during tuning; (3) added one sentence to Section 4.3 noting the Task 5 cross-check |
+| HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | PR-AUC = 0.7252 — highest model, +0.021 above RF. Hyperparameters are untuned defaults; tuning deferred to a subsequent task |
+| Operating-rule demo | Agent originally included a threshold-0.5 vs top-20 % comparison in Task 4. I moved it to a later section, where it belongs — Task 4's role is architecture comparison, not operating-rule selection | Task 4.4 now contains a one-sentence deferral. The full three-rule comparison (top-20 % ranking, threshold ≈ 20 %, threshold 0.5) with recall/precision numbers lives in a dedicated operating-rule section |
+| Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** forward for tuning, because the PR-AUC gap (0.0210) is small and the two models have structurally different failure modes | I confirmed: (1) HistGBT leads by 0.021 on validation — non-trivial but validation rankings don't always transfer to test; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) error analysis (calibration, geography slice) provides diagnostics to confirm whether HistGBT's lead holds; (4) pre-committed validation PR-AUC as the sole decision criterion before running tuning; calibration and geography checked as post-decision diagnostics |
+| No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
+| `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in the tuning `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) deferring it to the tuning task gives a cleaner Task 4 narrative and a stronger tuning story |
+| `n_estimators=200` | Agent set RF to 200 trees without formal justification beyond "stable probability estimates" | I verified: (1) 200 is a standard sklearn community default for medium-sized datasets; (2) the tuning `param_dist` searches over `[100, 200, 300]`, so the choice is validated empirically during tuning |
