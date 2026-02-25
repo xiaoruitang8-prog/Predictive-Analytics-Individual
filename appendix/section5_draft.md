@@ -4,11 +4,10 @@
 
 ## Coding Plan
 
-1. **5.1 Sanity check — re-fit both shortlisted models.**  Re-fit HistGBT
-   and RandomForest (untuned) from Task 4 on `X_train_t` and evaluate on
-   `X_val_t` using all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%,
-   Precision@top-20%) to confirm the Task 4 numbers reproduce before
-   tuning.
+1. **5.1 Imports and baseline aliases.**  Import tuning / plotting
+   dependencies.  Alias the Task 4 fitted models (`hgbt`, `rf`) as
+   `hgbt_base`, `rf_base` so the tuning cell has clear untuned vs tuned
+   naming.
 
 2. **5.2 Tune both shortlisted candidates.**  `RandomizedSearchCV` on
    HistGBT and RandomForest (n\_iter=8 each, 3-fold CV, training only,
@@ -43,54 +42,24 @@ Constraints: test set accessed only in Cell 5.4 (once).
 
 ---
 
-## Cell 1 — 5.1 Sanity check
+## Cell 1 — 5.1 Imports and baseline aliases
 
 ```python
-# ── 5.1 Sanity check — re-fit both shortlisted models ────────────────────────
-# Re-fit HistGBT and RandomForest (untuned) so Task 5 is self-contained.
-# Confirm Task 4 validation numbers reproduce before tuning.
-# Inherits: X_train_t, X_val_t, y_train, y_val, SEED=42, TOP_PCT=0.20
-#            evaluate(), recall_precision_top()  (Task 4 Cell 1)
+# ── 5.1 Imports + baseline aliases ───────────────────────────────────────────
+# Inherits from Task 4: hgbt, rf (fitted), X_train_t, X_val_t, X_test_t,
+#   y_train, y_val, y_test, SEED, TOP_PCT, evaluate(), recall_precision_top()
 
-from sklearn.ensemble     import (HistGradientBoostingClassifier,
-                                   RandomForestClassifier)
 from sklearn.model_selection import RandomizedSearchCV
-from sklearn.metrics      import (average_precision_score, roc_auc_score,
-                                   recall_score, precision_score,
-                                   precision_recall_curve)
-import numpy  as np
-import pandas as pd
+from sklearn.metrics import precision_recall_curve
 
-# Re-fit both models with same defaults as Task 4 (no class_weight)
-hgbt_base = HistGradientBoostingClassifier(random_state=SEED)
-hgbt_base.fit(X_train_t, y_train)
-
-rf_base = RandomForestClassifier(n_estimators=200, random_state=SEED, n_jobs=-1)
-rf_base.fit(X_train_t, y_train)
-
-# Confirm Task 4 numbers reproduce
-sanity = pd.DataFrame([
-    evaluate("HistGBT (untuned)", hgbt_base, X_val_t, y_val),
-    evaluate("RF (untuned)",      rf_base,   X_val_t, y_val),
-])
-print("── 5.1 Sanity check: both shortlisted models on validation ──")
-display(sanity)
-print("Task 4 numbers reproduced — ready to tune.")
+hgbt_base, rf_base = hgbt, rf   # alias for tuned-vs-untuned clarity
 ```
 
-### 5.1  Sanity Check
+### 5.1  Imports and Baseline Aliases
 
-Both shortlisted models (HistGBT and RandomForest) are re-fit on
-`X_train_t` and evaluated on `X_val_t` to confirm the Task 4 numbers
-reproduce before tuning begins.
-
-| Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
-|-------|--------|---------|---------------|------------------|
-| HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| RF (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-
-*[fill: confirm these match Task 4 values for both models.  If they
-differ, check that SEED and preprocessing are identical.]*
+No re-fitting — `hgbt` and `rf` are already fitted in Task 4 (same
+notebook session, same SEED).  Aliased as `hgbt_base` / `rf_base` so
+that Cell 2 can compare `*_base` vs `*_tuned` without ambiguity.
 
 ---
 
@@ -648,7 +617,7 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 |------|--------------------|------------------------------|
 | Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
 | Shortlist scope | Agent initially designed Task 5 for a single model (HistGBT only). I requested carrying both HistGBT and RF into Task 5, because the PR-AUC gap from Task 4 was < 0.01 (noise) and the two models have structurally different failure modes | I confirmed: (1) tuning budget remains small (2 × 8 × 3 = 48 fits on 7k rows); (2) pre-committed a 4-step decision rule before seeing Task 5 results; (3) error analysis diagnostics (calibration, geography) now compare both models side-by-side to justify the final pick |
-| Sanity check | Re-fit both HistGBT and RF (untuned) on training; confirmed Task 4 validation numbers reproduce for both | *[fill: confirm PR-AUC matches Task 4 for both models; if they differ, check SEED and preprocessing]* |
+| Baseline aliases | Agent originally re-fit both models from scratch (redundant — same notebook session, same SEED). I replaced with a one-line alias (`hgbt_base, rf_base = hgbt, rf`) — no re-fitting needed | I confirmed: aliased models produce the same val PR-AUC as Task 4 (HistGBT 0.7252, RF 0.7042) since they are the same objects in memory |
 | Tuning | `RandomizedSearchCV` on both models: n\_iter=8 each, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params for each; confirm tuning gains ΔPR-AUC; note if marginal or meaningful; check if any best params are at grid boundaries]* |
 | Operating rule | Locked top-20 % ranking as main rule; derived threshold from val-leader's 80th-percentile probabilities for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
 | Test evaluation | Both tuned models evaluated on test set (single access); pre-committed decision rule Step 1 (PR-AUC) applied | *[fill: which model wins Step 1? Is the gap meaningful (> 0.01) or still within noise? val → test PR-AUC gap ≤ 0.02 for each?]* |
