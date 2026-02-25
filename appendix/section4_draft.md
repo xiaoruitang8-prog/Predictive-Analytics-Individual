@@ -75,18 +75,13 @@ print("evaluate() ready — 4 metrics: PR-AUC | ROC-AUC | Recall@top20% | Precis
 
 ### 4.1  Shared Evaluation Setup
 
-All models are scored on the **validation set** (`X_val_t`, `y_val`) using
-four metrics:
-
-| Metric | Role | Why this metric |
-|--------|------|-----------------|
-| **PR-AUC** | Primary | Best single number for imbalanced data — conditions on the positive class, so true negatives cannot inflate the score (Davis & Goadrich 2006) |
-| **ROC-AUC** | Secondary | Threshold-free discrimination benchmark; useful but less sensitive under class imbalance |
-| **Recall@top-20 %** | Business | Of all actual churners, what fraction falls in our top-20 % risk bucket? Directly models the retention campaign's capacity constraint |
-| **Precision@top-20 %** | Business | Of the customers we flag, what fraction are genuine churners? High precision = fewer wasted interventions |
-
-`evaluate()` always uses `predict_proba()[:, 1]` — never binary `predict()`.
-This keeps model rankings fair and ensures PR-AUC integrates the full curve.
+All models are scored on the **validation set** using four metrics:
+PR-AUC (primary — best single number for imbalanced data), ROC-AUC
+(secondary discrimination check), Recall@top-20 % (churner coverage
+within the campaign's fixed capacity), and Precision@top-20 %
+(wasted-intervention rate).  `evaluate()` uses `predict_proba()`, not
+`predict()`, so PR-AUC integrates the full precision–recall curve.  The
+test set is not used in Task 4.
 
 ---
 
@@ -113,16 +108,12 @@ display(pd.DataFrame(results))
 
 ### 4.2  Baselines
 
-**Dummy (most\_frequent)** always predicts the majority class (Stay).
-PR-AUC = 0.2040 (≈ churn prevalence), ROC-AUC = 0.50.  This is the
-no-skill floor — every useful model must clearly exceed it.
-
-**LogReg** jumps to PR-AUC = 0.5068 and ROC-AUC = 0.7846, confirming
-the features carry real predictive signal and that even a simple linear
-model ranks customers well above chance.  The sharp improvement over
-Dummy (PR-AUC +0.30) establishes that there is meaningful signal in the
-features; the question is whether non-linear models can exploit it
-further.
+**Dummy (most\_frequent)** always predicts Stay: PR-AUC = 0.2040
+(≈ churn prevalence), ROC-AUC = 0.50 — the no-skill floor every model
+must beat.  **LogReg** (default settings) jumps to PR-AUC = 0.5068,
+confirming the features carry real signal well above chance.  This +0.30
+improvement establishes the linear ceiling; the question is whether
+non-linear models can push further.
 
 ---
 
@@ -156,25 +147,13 @@ display(pd.DataFrame(results[-2:]))
 
 ### 4.3  Tree Ensemble and Modern Tabular Model
 
-**RandomForest** uses sklearn defaults — no class reweighting, no depth
-limit, 200 trees for stable probability estimates on ~7 000 training rows.
-
-**HistGradientBoosting** is the modern tabular approach in this comparison.
-Histogram binning makes each boosting round O(n\_bins × n\_features).
-All hyperparameters are sklearn defaults; tuning — including whether
-`class_weight="balanced"` helps — is deferred to Task 5 to keep this
-section a pure model-architecture comparison.
-
-> **Why not XGBoost / LightGBM?**  Neither is in `requirements.txt`.
-> `HistGradientBoostingClassifier` (sklearn ≥ 1.0) is the sklearn-native
-> equivalent, avoiding an extra dependency.
-
-Both tree ensembles leap well above LogReg: **HistGBT** PR-AUC = **0.7252**,
-**RandomForest** PR-AUC = **0.7042** — each roughly +0.20 over the linear
-baseline and +0.50 over the no-skill floor (0.2040).  HistGBT leads by
-**0.0210** — a small but non-trivial gap.  Both are carried forward to
-Task 5, where tuning and error analysis will confirm whether HistGBT's
-validation-set lead holds on the test set.
+**RandomForest** (200 trees, sklearn defaults) and
+**HistGradientBoosting** (sklearn-native histogram-based boosting,
+defaults) are both fitted on training data and evaluated on validation.
+All hyperparameters are untuned defaults; tuning is deferred to Task 5
+to keep this section a pure architecture comparison.  Both leap well
+above LogReg: HistGBT PR-AUC = **0.7252**, RF PR-AUC = **0.7042** —
+each roughly +0.20 over the linear baseline.
 
 ---
 
@@ -234,85 +213,38 @@ display(shortlist)
 print(f"PR-AUC gap between top 2: {gap:.4f} — within noise for ~{len(y_val)}-row val set.")
 ```
 
-### 4.4  Full Comparison and Operating-Rule Demo
+### 4.4  Full Comparison and Shortlist
 
 **Validation results** (sorted by PR-AUC; Dummy floor omitted —
 PR-AUC ≈ 0.20, ROC-AUC = 0.50):
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
-| HistGBT | 0.7252 | 0.8781 | 0.6471 | 0.66 |
-| RandomForest | 0.7042 | 0.8722 | 0.6373 | 0.65 |
+| HistGBT | 0.7252 | 0.8781 | 0.6471 | 0.6600 |
+| RandomForest | 0.7042 | 0.8722 | 0.6373 | 0.6500 |
 | LogReg | 0.5068 | 0.7846 | 0.6338 | 0.6338 |
 
-**Operating-rule comparison (HistGBT, validation set):**
+A quick operating-rule check confirms that a top-20 % ranking fills
+the campaign's 300-slot capacity and catches more churners than a naive
+0.5 threshold — the full comparison is in Section 5.3.
 
-| Decision rule | Flagged | Recall | Precision |
-|---------------|---------|--------|-----------|
-| Threshold 0.5 | 199 | 0.4837 | 0.7437 |
-| Top-20% ranking | 300 | 0.6471 | 0.6600 |
-
-The 0.5 threshold is calibrated for 50/50 class balance. On a ~20%
-minority class it drastically under-flags — identifying only 199
-customers versus the 300 that the top-20% rule always selects. This
-leaves a third of the campaign's capacity unused and misses over half
-of the actual churners (recall 0.48 vs 0.65). The top-20% ranking
-rule always fills every available slot, matching the retention
-campaign's fixed-capacity constraint, and raises recall by +0.16 at
-the cost of lower precision (0.66 vs 0.74). In a retention context,
-the cost of a wasted offer (false positive) is far lower than the cost
-of losing a customer (false negative), so the recall gain clearly
-justifies the precision trade-off.
+Both tree ensembles clearly outperform the linear baseline.  The gap
+between HistGBT and RF (0.021 in PR-AUC) is modest enough that
+validation noise could reverse it, and the two models learn differently
+— boosting reduces bias while bagging reduces variance — so they are
+likely to differ on calibration and subgroup performance.  **Both are
+shortlisted for Task 5**, where tuning and error analysis will
+determine the final pick.  The decision criterion is pre-committed
+before running Task 5: highest validation PR-AUC after tuning.
 
 ---
 
 ## 4.5  Shortlist Decision
 
-*Markdown cell — fill after running all four cells.*
-
----
-
-**Shortlisted for Task 5: HistGBT and RandomForest**
-
-On the validation set the two tree ensembles clearly dominate:
-**HistGBT** PR-AUC = **0.7252**, **RandomForest** PR-AUC = **0.7042** —
-both roughly +0.20 above LogReg and +0.50 above the no-skill floor.
-The gap between them is **0.0210** — small in absolute terms but
-non-negligible.  HistGBT leads on validation, but validation rankings
-do not always transfer to the test set.
-
-**Why two, not one:**  The two models have structurally different
-learning mechanisms — RF bags independent trees (variance reduction),
-HistGBT sequentially corrects residuals (bias reduction) — so they are
-likely to differ on calibration quality and subgroup (geography)
-performance.  Carrying both into Task 5 lets the error analysis
-(calibration curve, geography slice, confusion matrix) confirm whether
-HistGBT's validation lead holds and whether it is also the fairer and
-better-calibrated model.
-
-**Pre-committed decision criterion for Task 5 final selection:**
-
-- **Decision criterion:** highest **validation** PR-AUC after tuning
-  (Cell 5.3).  The test set is not accessed until after the decision is
-  locked.
-
-**Post-decision diagnostics (cannot override the locked choice):**
-
-- **Calibration quality** — which model's reliability curve is closer to
-  the diagonal (Cell 5.5c)
-- **Geography-slice fairness** — smallest max–min PR-AUC gap across
-  countries (Cell 5.5d)
-- **Tiebreaker** (only if validation PR-AUC is identical) — HistGBT
-  preferred on engineering grounds (native missing-value handling, richer
-  tuning surface)
-
-LogReg (PR-AUC = 0.5068) is well above the no-skill floor (0.2040) but
-substantially behind the tree models — the non-linear interactions that
-trees capture (e.g. Age × NumOfProducts) cannot be recovered by a linear
-decision boundary.
-
-Selection will be made on **validation metrics only**; the test set
-remains untouched until Task 5 Cell 5.4 (report only).
+HistGBT and RandomForest are carried into Task 5.  The final model will
+be selected on **validation PR-AUC after tuning** — a criterion
+pre-committed before seeing Task 5 results.  Calibration and geography
+checks serve as post-decision diagnostics only (Section 5.5).
 
 ---
 

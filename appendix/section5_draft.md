@@ -153,11 +153,10 @@ print(f"Tuning gain — RF:     ΔPR-AUC = {delta_rf:+.4f}")
 
 ### 5.2  Tuning Both Shortlisted Candidates
 
-`RandomizedSearchCV` searches a small hyperparameter space for each
-shortlisted model using PR-AUC as the scoring metric (correct for
-imbalanced data — see Section 5.6 for why ROC-AUC would mislead).
-The validation set is **not** seen by either search; it is evaluated
-once afterwards.
+`RandomizedSearchCV` with 3-fold CV on **training data only**, scoring
+on `average_precision` (= PR-AUC).  Eight random combinations per model,
+48 fits total.  The validation set is not seen by the search; it is
+evaluated once afterwards.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
@@ -166,29 +165,14 @@ once afterwards.
 | HistGBT (untuned) | 0.7252 | 0.8781 | 0.6471 | 0.6600 |
 | RF (untuned)      | 0.7042 | 0.8722 | 0.6373 | 0.6500 |
 
-**HistGBT best parameters:** `min_samples_leaf=20, max_iter=300,
-max_depth=3, learning_rate=0.05, class_weight=None`.
-**RF best parameters:** `n_estimators=200, min_samples_leaf=5,
-max_depth=None, class_weight=None`.
-
-Tuning gain — HistGBT: ΔPR-AUC = +0.0072 (marginal).
-Tuning gain — RF: ΔPR-AUC = +0.0227 (meaningful, > 0.005 threshold).
-
-HistGBT's gain is marginal — the defaults were already near-optimal
-(`max_depth=3`, `learning_rate=0.05` are conservative regularisation
-values typical for boosting).  RF benefits more: the search found
-`min_samples_leaf=5` (vs the sklearn default of 1), which slightly
-reduces variance without over-smoothing.
-
-**Boundary check:** `max_iter=300` is the grid maximum for HistGBT —
-a larger budget might squeeze out another fraction, but the marginal
-gain is already small so extending is unlikely to help.  RF's
-`max_depth=None` (fully grown trees) was also in the grid, so the
-search could have preferred a shallower depth but did not.
-
-On validation PR-AUC, HistGBT (tuned) leads at 0.7324 vs RF (tuned)
-0.7269 — a gap of 0.0055, still within noise.  The final model is
-locked on validation in Cell 5.3; test is used only for reporting.
+HistGBT's gain is marginal (ΔPR-AUC = +0.007) — the defaults were
+already near-optimal.  RF benefits more (ΔPR-AUC = +0.023) as the
+search found `min_samples_leaf=5`, slightly reducing variance.  After
+tuning, HistGBT leads at 0.7324 vs RF 0.7269 — a gap of 0.005, still
+within noise.  Best parameters: HistGBT `{max_iter:300, max_depth:3,
+lr:0.05, min_samples_leaf:20, class_weight:None}`;
+RF `{n_estimators:200, min_samples_leaf:5, max_depth:None,
+class_weight:None}`.
 
 ---
 
@@ -259,25 +243,18 @@ print(f"{'='*60}")
 
 ### 5.3  Lock All Choices on Validation
 
-Three choices are locked here using **validation data only**, before any
-test access:
+Three choices are locked using **validation data only**, before any test
+access:
 
-**(a) Final model — validation PR-AUC (pre-committed decision criterion).**
-HistGBT (tuned) leads with val PR-AUC = 0.7324 vs RF (tuned) = 0.7269.
-The gap (0.0055) is small but nonzero.  Because the pre-committed
-criterion (Section 4.5) is "highest validation PR-AUC", HistGBT is locked
-as the final model.  The runner-up (RF) is carried forward only for
-diagnostic comparison — it cannot override this decision.
+**(a) Final model.**  HistGBT (tuned) leads with val PR-AUC = 0.7324 vs
+RF = 0.7269.  The pre-committed criterion is "highest validation PR-AUC",
+so HistGBT is locked.  RF is carried forward for diagnostic comparison
+only — it cannot override this decision.
 
-**(b) Operating rule — top-20 % ranking.**
-The retention campaign can contact exactly 20 % of customers, so the
-primary rule is **top-20 % by predicted churn risk** — a ranking rule that
-fills every slot regardless of probability calibration.
-
-**(c) Threshold for confusion matrix.**
-A threshold of 0.3235 is derived from the 80th percentile of the locked
-model's validation probabilities.  This flags exactly 20.0 % of validation
-customers, giving a confusion-matrix view consistent with the ranking rule.
+**(b) Operating rule.**  The campaign contacts exactly 20 % of customers.
+A top-20 % ranking fills every slot regardless of calibration.  Threshold
+0.5 flags only 12.3 % — wasting capacity and dropping recall from 0.6471
+to 0.4673.
 
 | Rule | Flagged (%) | Recall | Precision |
 |------|-------------|--------|-----------|
@@ -285,19 +262,11 @@ customers, giving a confusion-matrix view consistent with the ranking rule.
 | Threshold ≈ 20 % (t=0.3235) | 20.0 | 0.6471 | 0.6600 |
 | Threshold 0.5 (naive) | 12.3 | 0.4673 | 0.7772 |
 
-The top-20 % ranking and the fitted threshold (0.3235) produce identical
-recall/precision because the 80th-percentile threshold happens to flag
-exactly the top 20 %.  Threshold 0.5 flags only 12.3 % of customers —
-wasting 7.7 percentage points of the campaign's 20 % capacity and dropping
-recall from 0.6471 to 0.4673 (−0.18).  Higher precision (0.7772) at 0.5
-is misleading: the campaign cannot use unused slots, so the relevant
-comparison is recall at the same budget.
+**(c) Threshold for confusion matrix.**  The 80th percentile of the
+locked model's validation probabilities gives threshold 0.3235, which
+flags exactly 20 % — consistent with the ranking rule.
 
-**All choices are now locked:**
-- Final model: HistGBT (tuned)
-- Operating rule: top-20 % ranking
-- Threshold for CM: 0.3235
-- Test set: **not yet accessed**
+**All choices locked.  Test set: not yet accessed.**
 
 ---
 
@@ -558,40 +527,49 @@ Churn distributions.
 HistGBT geography PR-AUC gap (max−min): 0.1579.
 RF geography PR-AUC gap (max−min): 0.1769.
 
-HistGBT has the smaller gap (0.1579 vs 0.1769) → fairer across
-geographies.  This is a post-decision diagnostic — it cannot change the
-locked choice, but it is consistent with it.
+HistGBT has the smaller gap (0.1579 vs 0.1769) — fairer across
+geographies.  Germany has the highest PR-AUC (0.8166) but the lowest
+Recall@top-20 % (0.5702) — a ceiling effect: with ~32 % churners and
+only 20 % flagged, maximum recall ≈ 0.625.  Spain (~16 % churn)
+achieves the highest recall (0.7193) because the budget captures a
+larger share of its smaller churner pool.  In deployment, Germany's
+higher miss rate should be monitored.
 
-Germany has the **highest** PR-AUC (0.8166 for HistGBT) despite — or
-because of — its ~32 % churn rate: more positive examples give the model
-more signal for ranking.  However, Germany has the **lowest**
-Recall@top-20 % (0.5702).  This is a ceiling effect: with 32 % churners
-but only 20 % flagged, maximum possible recall ≈ 20/32 = 0.625.  Spain
-(~16 % churn) achieves the highest recall (0.7193) because the top-20 %
-budget can capture a larger fraction of its smaller churner pool.  France
-sits in between.  This is a structural artefact of the fixed-budget rule,
-not a model failure — but in deployment, Germany customers face a higher
-miss rate and should be monitored.
+**Post-decision diagnostics (cannot override the locked choice):**
 
-**Post-hoc consistency check (decision already locked in Cell 5.3):**
+| Check | Favours |
+|-------|---------|
+| Decision criterion (val PR-AUC) | HistGBT (0.7324 vs 0.7269) |
+| Calibration quality | (see calibration plot) |
+| Geography fairness | HistGBT (gap 0.158 vs 0.177) |
 
-The final model was locked on validation PR-AUC before test access.
-Calibration and geography checks are post-decision diagnostics — they
-cannot override the locked decision.
-
-| Check | Criterion | Applied on | Favours |
-|-------|-----------|------------|---------|
-| Decision criterion | PR-AUC | **validation** (Cell 5.3) | HistGBT (0.7324 vs 0.7269) |
-| Post-decision diagnostic 1 | Calibration quality | test (Cell 5.5c) | (see calibration plot) |
-| Post-decision diagnostic 2 | Geography fairness | test (Cell 5.5d) | HistGBT (gap 0.1579 vs 0.1769) |
-
-The geography diagnostic confirms the locked choice: HistGBT has a smaller
-cross-country PR-AUC gap (fairer).  The calibration diagnostic should be
-assessed from the plot (`outputs/5c_calibration.png`).  Even if one
-diagnostic were to favour RF, the decision would **not** be reversed —
-it was pre-committed on validation PR-AUC to avoid test-based selection.
+The geography diagnostic confirms the locked choice.  Even if one
+diagnostic favoured RF, the decision would not be reversed — it was
+pre-committed on validation to avoid test-based selection.
 
 **Final model (locked): HistGBT (tuned)**
+
+---
+
+### 5.6  Agent-Made Mistake: Test-Based Selection Leak
+
+**Mistake.**  The agent's original Cell 5.4 code selected the final model
+by sorting on **test-set** PR-AUC (`test_results.sort_values("PR-AUC").iloc[0]`).
+This made the reported test metrics also the selection criteria — so
+they were optimistically biased.  If RF happened to beat HistGBT on test
+despite losing on validation, the agent would have switched and reported
+RF's test numbers as "final" — a textbook data-leakage risk.
+
+**How I caught it.**  While reviewing Cell 5.4 I noticed that
+`FINAL_MODEL_NAME` was set *after* test access, not before.  The pipeline
+was supposed to follow a strict train → validate → test discipline, but
+the agent skipped the "decide on validation" step entirely.
+
+**Fix.**  I restructured the pipeline: Cell 5.3 now locks the final model
+on **validation** PR-AUC before any test access.  Cell 5.4 is pure
+reporting — it displays test metrics for the already-locked model and the
+runner-up, but cannot change the decision.  This ensures the reported
+test metrics are unbiased estimates of real-world performance.
 
 ---
 
