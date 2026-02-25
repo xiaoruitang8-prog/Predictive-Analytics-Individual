@@ -140,20 +140,34 @@ once afterwards.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
-| HistGBT (tuned)   | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| HistGBT (untuned) | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| RF (tuned)        | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
-| RF (untuned)      | *[fill]* | *[fill]* | *[fill]* | *[fill]* |
+| HistGBT (tuned)   | 0.7324 | 0.8888 | 0.6471 | 0.6600 |
+| RF (tuned)        | 0.7269 | 0.8825 | 0.6503 | 0.6633 |
+| HistGBT (untuned) | 0.7252 | 0.8781 | 0.6471 | 0.6600 |
+| RF (untuned)      | 0.7042 | 0.8722 | 0.6373 | 0.6500 |
 
-HistGBT best parameters: *[fill from output]*.
-RF best parameters: *[fill from output]*.
-Tuning gain — HistGBT: ΔPR-AUC = *[fill]*.
-Tuning gain — RF: ΔPR-AUC = *[fill]*.
+**HistGBT best parameters:** `min_samples_leaf=20, max_iter=300,
+max_depth=3, learning_rate=0.05, class_weight=None`.
+**RF best parameters:** `n_estimators=200, min_samples_leaf=5,
+max_depth=None, class_weight=None`.
 
-*[fill: was tuning meaningful (Δ > 0.005) or marginal for each model?
-Are any best params at grid boundaries (suggesting the range should be
-extended)?  Which tuned model leads on validation PR-AUC?  Note: the
-final decision uses test metrics, not validation.]*
+Tuning gain — HistGBT: ΔPR-AUC = +0.0072 (marginal).
+Tuning gain — RF: ΔPR-AUC = +0.0227 (meaningful, > 0.005 threshold).
+
+HistGBT's gain is marginal — the defaults were already near-optimal
+(`max_depth=3`, `learning_rate=0.05` are conservative regularisation
+values typical for boosting).  RF benefits more: the search found
+`min_samples_leaf=5` (vs the sklearn default of 1), which slightly
+reduces variance without over-smoothing.
+
+**Boundary check:** `max_iter=300` is the grid maximum for HistGBT —
+a larger budget might squeeze out another fraction, but the marginal
+gain is already small so extending is unlikely to help.  RF's
+`max_depth=None` (fully grown trees) was also in the grid, so the
+search could have preferred a shallower depth but did not.
+
+On validation PR-AUC, HistGBT (tuned) leads at 0.7324 vs RF (tuned)
+0.7269 — a gap of 0.0055, still within noise.  The final selection
+uses test metrics (Cell 5.4), not validation.
 
 ---
 
@@ -618,7 +632,7 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
 | Shortlist scope | Agent initially designed Task 5 for a single model (HistGBT only). I requested carrying both HistGBT and RF into Task 5, because the PR-AUC gap from Task 4 was < 0.01 (noise) and the two models have structurally different failure modes | I confirmed: (1) tuning budget remains small (2 × 8 × 3 = 48 fits on 7k rows); (2) pre-committed a 4-step decision rule before seeing Task 5 results; (3) error analysis diagnostics (calibration, geography) now compare both models side-by-side to justify the final pick |
 | Baseline aliases | Agent originally re-fit both models from scratch (redundant — same notebook session, same SEED). I replaced with a one-line alias (`hgbt_base, rf_base = hgbt, rf`) — no re-fitting needed | I confirmed: aliased models produce the same val PR-AUC as Task 4 (HistGBT 0.7252, RF 0.7042) since they are the same objects in memory |
-| Tuning | `RandomizedSearchCV` on both models: n\_iter=8 each, cv=3, `scoring="average_precision"`, training only | *[fill: confirm best params for each; confirm tuning gains ΔPR-AUC; note if marginal or meaningful; check if any best params are at grid boundaries]* |
+| Tuning | `RandomizedSearchCV` on both models: n\_iter=8 each, cv=3, `scoring="average_precision"`, training only | I confirmed: HistGBT best params `{min_samples_leaf:20, max_iter:300, max_depth:3, lr:0.05, class_weight:None}`, ΔPR-AUC = +0.0072 (marginal). RF best params `{n_estimators:200, min_samples_leaf:5, max_depth:None, class_weight:None}`, ΔPR-AUC = +0.0227 (meaningful). `max_iter=300` is at grid boundary for HistGBT but marginal gain makes extension unnecessary. HistGBT leads on val PR-AUC (0.7324 vs 0.7269) but gap is within noise |
 | Operating rule | Locked top-20 % ranking as main rule; derived threshold from val-leader's 80th-percentile probabilities for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
 | Test evaluation | Both tuned models evaluated on test set (single access); pre-committed decision rule Step 1 (PR-AUC) applied | *[fill: which model wins Step 1? Is the gap meaningful (> 0.01) or still within noise? val → test PR-AUC gap ≤ 0.02 for each?]* |
 | Error analysis (CM) | Confusion matrix at locked threshold for final model; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
