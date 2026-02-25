@@ -16,8 +16,8 @@
 
 3. **5.3 Lock all choices on validation.**  Lock **three things** using
    validation data only, before any test access:
-   (a) **Final model** — by validation PR-AUC (Step 1 of pre-committed
-       rule from Section 4.5).
+   (a) **Final model** — by validation PR-AUC (pre-committed decision
+       criterion from Section 4.5).
    (b) **Operating rule** — top-20 % by predicted risk.
    (c) **Threshold** — 80th percentile of the locked model's validation
        probabilities, for confusion-matrix view.
@@ -33,7 +33,7 @@
    - **(c)** Calibration diagram (both models side-by-side)
    - **(d)** Geography failure-mode slice (both models)
    Save figures to `outputs/`.  Diagnostics (b)–(d) compare both models
-   to justify the final selection per the pre-committed rule.
+   as post-decision checks — they cannot override the locked selection.
 
 Constraints: test is not used for tuning or model selection; it is
 accessed only after all choices are locked (Cell 5.3), for final
@@ -50,7 +50,7 @@ strict **train → validate → test** discipline:
    CV on `X_train_t`.  The validation set is not seen by the search.
 2. **Decide on validation only** (Cell 5.3): The final model, operating
    rule, and threshold are all locked using validation metrics — before
-   any test access.  Step 1 of the pre-committed decision rule (highest
+   any test access.  The pre-committed decision criterion (highest
    validation PR-AUC) determines the winner.
 3. **Report on test** (Cells 5.4–5.5): The test set is accessed only
    after all choices are locked.  It is used for final evaluation and
@@ -197,7 +197,7 @@ locked on validation in Cell 5.3; test is used only for reporting.
 ```python
 # ── 5.3 Lock all choices on validation ────────────────────────────────────────
 # BEFORE any test access, lock:
-#   (a) Final model — by validation PR-AUC (Step 1 of pre-committed rule)
+#   (a) Final model — by validation PR-AUC (pre-committed decision criterion)
 #   (b) Operating rule — top-20% by predicted risk
 #   (c) Threshold — 80th percentile of val probabilities for CM view
 
@@ -213,7 +213,7 @@ runner_up_model  = rf_tuned    if FINAL_MODEL_NAME == "HistGBT (tuned)" else hgb
 print(f"LOCKED final model: {FINAL_MODEL_NAME}")
 print(f"  Val PR-AUC: {FINAL_MODEL_NAME} = {max(hgbt_val_prauc, rf_val_prauc):.4f}  "
       f"vs  {runner_up_name} = {min(hgbt_val_prauc, rf_val_prauc):.4f}")
-print(f"  Decision: Step 1 of pre-committed rule (highest val PR-AUC)")
+print(f"  Decision: pre-committed criterion (highest val PR-AUC)")
 
 # ── (b) Operating rule: top-20% ranking ───────────────────────────────────────
 proba_val  = final_model.predict_proba(X_val_t)[:, 1]
@@ -262,11 +262,11 @@ print(f"{'='*60}")
 Three choices are locked here using **validation data only**, before any
 test access:
 
-**(a) Final model — validation PR-AUC (Step 1 of pre-committed rule).**
+**(a) Final model — validation PR-AUC (pre-committed decision criterion).**
 HistGBT (tuned) leads with val PR-AUC = 0.7324 vs RF (tuned) = 0.7269.
-The gap (0.0055) is small but nonzero.  Because the pre-committed rule
-(Section 4.5) specifies "highest PR-AUC" as Step 1, HistGBT is locked as
-the final model.  The runner-up (RF) is carried forward only for
+The gap (0.0055) is small but nonzero.  Because the pre-committed
+criterion (Section 4.5) is "highest validation PR-AUC", HistGBT is locked
+as the final model.  The runner-up (RF) is carried forward only for
 diagnostic comparison — it cannot override this decision.
 
 **(b) Operating rule — top-20 % ranking.**
@@ -494,12 +494,12 @@ display(geo_df.pivot_table(index="Geography",
                             values=["PR-AUC", "Recall@top20%"],
                             aggfunc="first"))
 
-# ── Post-hoc consistency checks (Steps 2–3 of pre-committed rule) ────────────
-# The final model was ALREADY locked on validation (Cell 5.3, Step 1).
-# Steps 2–3 are shown here as diagnostics — they CANNOT change the decision.
-# Step 2: Calibration — which model's reliability curve is closer to diagonal?
+# ── Post-decision diagnostics ─────────────────────────────────────────────────
+# The final model was ALREADY locked on validation PR-AUC (Cell 5.3).
+# The checks below are post-decision diagnostics — they CANNOT change the decision.
+# Diagnostic 1: Calibration — which model's reliability curve is closer to diagonal?
 # (Visual comparison from plot above — document in report text)
-# Step 3: Geography fairness — smallest max–min PR-AUC gap across countries
+# Diagnostic 2: Geography fairness — smallest max–min PR-AUC gap across countries
 for model_name, proba_m in [("HistGBT", proba_test_hgbt),
                               ("RF",      proba_test_rf)]:
     sub = geo_df[geo_df["Model"] == model_name]
@@ -527,9 +527,10 @@ consistent with the PR-AUC numbers from Cell 5.4?]*
 
 *[fill: which model's reliability curve tracks the diagonal more closely?
 If one bows above (over-predicts) and the other bows below (under-predicts),
-note this.  This is Step 2 of the pre-committed decision rule.  Comment
-on class separation in the score-distribution histogram — good separation
-means the locked threshold sits in a low-density region.]*
+note this.  This is a post-decision diagnostic — it cannot change the
+locked choice.  Comment on class separation in the score-distribution
+histogram — good separation means the locked threshold sits in a
+low-density region.]*
 
 **(d) Geography slice — both models:**
 
@@ -542,27 +543,27 @@ means the locked threshold sits in a low-density region.]*
 HistGBT geography PR-AUC gap (max−min): *[fill]*.
 RF geography PR-AUC gap (max−min): *[fill]*.
 
-*[fill: which model has the smaller gap (fairer)?  This is Step 3 of the
-pre-committed decision rule.  Germany has ~32 % churn vs ~16 % elsewhere
-(EDA) — if PR-AUC is lower for Germany despite higher prevalence, flag
-as a deployment risk.]*
+*[fill: which model has the smaller gap (fairer)?  This is a post-decision
+diagnostic — it cannot change the locked choice.  Germany has ~32 % churn
+vs ~16 % elsewhere (EDA) — if PR-AUC is lower for Germany despite higher
+prevalence, flag as a deployment risk.]*
 
 **Post-hoc consistency check (decision already locked in Cell 5.3):**
 
 The final model was locked on validation PR-AUC before test access.
-Steps 2–3 are reported below as diagnostics — they cannot override the
-locked decision.
+Calibration and geography checks are post-decision diagnostics — they
+cannot override the locked decision.
 
-| Step | Criterion | Applied on | Favours |
-|------|-----------|------------|---------|
-| 1 | PR-AUC (decision criterion) | **validation** (Cell 5.3) | *[fill]* |
-| 2 | Calibration quality (diagnostic) | test (Cell 5.5c) | *[fill]* |
-| 3 | Geography fairness (diagnostic) | test (Cell 5.5d) | *[fill]* |
+| Check | Criterion | Applied on | Favours |
+|-------|-----------|------------|---------|
+| Decision criterion | PR-AUC | **validation** (Cell 5.3) | *[fill]* |
+| Post-decision diagnostic 1 | Calibration quality | test (Cell 5.5c) | *[fill]* |
+| Post-decision diagnostic 2 | Geography fairness | test (Cell 5.5d) | *[fill]* |
 
-*[fill: do Steps 2–3 confirm or contradict the locked choice?  If they
-confirm, note the convergence.  If they contradict, acknowledge this
-transparently but explain that the decision was pre-committed on
-validation to avoid test-based selection.]*
+*[fill: do the post-decision diagnostics confirm or contradict the locked
+choice?  If they confirm, note the convergence.  If they contradict,
+acknowledge this transparently but explain that the decision was
+pre-committed on validation to avoid test-based selection.]*
 
 **Final model (locked): [fill]**
 
@@ -571,8 +572,9 @@ validation to avoid test-based selection.]*
 ## Model Card
 
 **Model:** *[fill: HistGradientBoostingClassifier or RandomForestClassifier]*
-(tuned) — sklearn native.  Selected by pre-committed decision rule
-(Section 4.5) applied to test-set metrics and error-analysis diagnostics.
+(tuned) — sklearn native.  Selected on validation PR-AUC after tuning
+(Cell 5.3); test set used only for final reporting and diagnostics
+(Cells 5.4–5.5).
 
 **What it is for:**
 Ranking bank customers by churn risk so a fixed-capacity retention campaign
@@ -618,17 +620,17 @@ Ranking bank customers by churn risk so a fixed-capacity retention campaign
 | Step | What My Agent Did | What I Verified or Corrected |
 |------|--------------------|------------------------------|
 | Metrics alignment | Agent initially used 3 metrics in Task 5. I requested Precision@top-20% be added as a fourth metric across all tables, consistent with Section 1.3 | I confirmed all 4 metrics (PR-AUC, ROC-AUC, Recall@top-20%, Precision@top-20%) appear in every evaluation table in Tasks 4 and 5 |
-| Shortlist scope | Agent initially designed Task 5 for a single model (HistGBT only). I requested carrying both HistGBT and RF into Task 5, because the PR-AUC gap from Task 4 was < 0.01 (noise) and the two models have structurally different failure modes | I confirmed: (1) tuning budget remains small (2 × 8 × 3 = 48 fits on 7k rows); (2) pre-committed a 4-step decision rule before seeing Task 5 results; (3) error analysis diagnostics (calibration, geography) now compare both models side-by-side to justify the final pick |
+| Shortlist scope | Agent initially designed Task 5 for a single model (HistGBT only). I requested carrying both HistGBT and RF into Task 5, because the PR-AUC gap from Task 4 was < 0.01 (noise) and the two models have structurally different failure modes | I confirmed: (1) tuning budget remains small (2 × 8 × 3 = 48 fits on 7k rows); (2) pre-committed validation PR-AUC as the decision criterion before seeing Task 5 results; (3) error analysis diagnostics (calibration, geography) now compare both models side-by-side as post-decision checks |
 | Baseline aliases | Agent originally re-fit both models from scratch (redundant — same notebook session, same SEED). I replaced with a one-line alias (`hgbt_base, rf_base = hgbt, rf`) — no re-fitting needed | I confirmed: aliased models produce the same val PR-AUC as Task 4 (HistGBT 0.7252, RF 0.7042) since they are the same objects in memory |
 | Tuning | `RandomizedSearchCV` on both models: n\_iter=8 each, cv=3, `scoring="average_precision"`, training only | I confirmed: HistGBT best params `{min_samples_leaf:20, max_iter:300, max_depth:3, lr:0.05, class_weight:None}`, ΔPR-AUC = +0.0072 (marginal). RF best params `{n_estimators:200, min_samples_leaf:5, max_depth:None, class_weight:None}`, ΔPR-AUC = +0.0227 (meaningful). `max_iter=300` is at grid boundary for HistGBT but marginal gain makes extension unnecessary. HistGBT leads on val PR-AUC (0.7324 vs 0.7269) but gap is within noise |
-| Test-based selection leak | Agent originally selected the final model by **test** PR-AUC in Cell 5.4 (`test_results.iloc[0]`), making the reported test metrics optimistically biased. I restructured: Cell 5.3 now locks the final model on **validation** PR-AUC (Step 1); Cell 5.4 is pure reporting. Cell 5.5 diagnostics are reframed as post-hoc consistency checks that cannot override the locked decision | I confirmed: (1) no test data is accessed before Cell 5.4; (2) `FINAL_MODEL_NAME` is set in Cell 5.3 using `hgbt_val_prauc` vs `rf_val_prauc`; (3) Cell 5.4 cannot change the decision; (4) wording changed from "test accessed once" to accurate description |
+| Test-based selection leak | Agent originally selected the final model by **test** PR-AUC in Cell 5.4 (`test_results.iloc[0]`), making the reported test metrics optimistically biased. I restructured: Cell 5.3 now locks the final model on **validation** PR-AUC (pre-committed criterion); Cell 5.4 is pure reporting. Cell 5.5 diagnostics are reframed as post-decision checks that cannot override the locked decision | I confirmed: (1) no test data is accessed before Cell 5.4; (2) `FINAL_MODEL_NAME` is set in Cell 5.3 using `hgbt_val_prauc` vs `rf_val_prauc`; (3) Cell 5.4 cannot change the decision; (4) wording changed from "test accessed once" to accurate description |
 | Operating rule | Locked top-20 % ranking as main rule; derived threshold from locked model's 80th-percentile val probabilities for CM view; showed 0.5 threshold is too conservative | *[fill: confirm LOCKED_THRESH flags ~20 % on validation; confirm 0.5 flags far fewer; confirm test not accessed]* |
 | Test evaluation | Locked final model evaluated on test (report only); runner-up shown for context, clearly labelled | *[fill: report val → test PR-AUC shift for each model; note if runner-up beats locked model on test — if so, do NOT switch]* |
 | Error analysis (CM) | Confusion matrix at locked threshold for final model; saved to `outputs/5a_confusion_matrix.png` | *[fill: check figure saved; note TP/FP/FN/TN counts; relate FP rate to Precision@top-20%]* |
 | Error analysis (PR curve) | PR curve comparing both models on test; locked threshold marked as red dot | *[fill: do curves overlap? Which dominates in high-recall region? Is gap consistent with PR-AUC numbers?]* |
-| Error analysis (calibration) | Calibration reliability curves for both models on same axes + score histogram for final model; saved to `outputs/5c_calibration.png` | *[fill: which model tracks the diagonal more closely? This is Step 2 of the decision rule. Comment on class separation in the histogram]* |
-| Error analysis (geography) | Per-country PR-AUC and Recall@top-20% for both models; computes max–min PR-AUC gap per model | *[fill: which model has smaller gap (fairer)? This is Step 3 of the decision rule. Note worst geography for each; flag fairness implications]* |
-| Final selection | Final model locked on **validation** PR-AUC in Cell 5.3 (Step 1 of pre-committed rule). Steps 2–3 shown as post-hoc diagnostics on test in Cell 5.5 — they cannot override | *[fill: confirm Steps 2–3 are consistent with the locked choice; if they contradict, acknowledge transparently; state final model name]* |
+| Error analysis (calibration) | Calibration reliability curves for both models on same axes + score histogram for final model; saved to `outputs/5c_calibration.png` | *[fill: which model tracks the diagonal more closely? Post-decision diagnostic — cannot change the locked choice. Comment on class separation in the histogram]* |
+| Error analysis (geography) | Per-country PR-AUC and Recall@top-20% for both models; computes max–min PR-AUC gap per model | *[fill: which model has smaller gap (fairer)? Post-decision diagnostic — cannot change the locked choice. Note worst geography for each; flag fairness implications]* |
+| Final selection | Final model locked on **validation** PR-AUC in Cell 5.3. Calibration and geography shown as post-decision diagnostics on test in Cell 5.5 — they cannot override | *[fill: confirm post-decision diagnostics are consistent with the locked choice; if they contradict, acknowledge transparently; state final model name]* |
 | Model card | Agent drafted model card with intended use, limitations, data constraints, evaluation caveats, and 4-metric summary table | *[fill: confirm model card accurately reflects final model and results]* |
 | `calibration_curve` import error (Cell 5.5) | Agent wrote `from sklearn.metrics import ConfusionMatrixDisplay, calibration_curve` — importing `calibration_curve` from `sklearn.metrics`. This raises `ImportError` in recent sklearn versions because `calibration_curve` lives in `sklearn.calibration`, not `sklearn.metrics` | I caught the `ImportError` at runtime, identified the correct module (`sklearn.calibration`), and split the import into two lines: `from sklearn.metrics import ConfusionMatrixDisplay` and `from sklearn.calibration import calibration_curve`. Cell 5.5 now runs without error |
 | `MallocStackLogging` warnings (Cell 5.2) | Agent used `n_jobs=-1` in both `RandomizedSearchCV` calls, which spawns parallel worker processes via `joblib`. On macOS, each child process emits `MallocStackLogging: can't turn off malloc stack logging because it was not enabled` | I confirmed these are **harmless macOS system-level messages** — they do not affect tuning results, model parameters, or metrics. No code change needed. Setting `os.environ["MallocStackLogging"] = "0"` before the cell suppresses them cosmetically if desired |
