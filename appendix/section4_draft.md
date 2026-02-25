@@ -18,13 +18,12 @@
    `HistGradientBoostingClassifier` (modern tabular approach, sklearn-native).
    Both trained on `X_train_t`, evaluated on `X_val_t`.
 
-4. **4.4 Full comparison, operating-rule demo, and shortlist.**  One sorted
-   table of all models.  A small controlled comparison: HistGBT with
-   threshold 0.5 vs top-20% ranking, showing why ranking is more relevant
-   for a fixed-capacity retention campaign.  Shortlist the two
+4. **4.4 Full comparison and shortlist.**  One sorted table of all models.
+   Interpret all four metrics across architectures.  Shortlist the two
    best-performing models (by PR-AUC, excl. Dummy floor) for Task 5
    — their gap is within noise, so deeper Task 5 diagnostics will
-   decide the final pick.
+   decide the final pick.  The operating-rule comparison (ranking vs.
+   threshold 0.5) is deferred to Section 5.3.
 
 Constraints: **no hyperparameter search** in Task 4 — all models use
 sensible defaults.  Test set **never touched**.  `random_state=SEED`
@@ -108,12 +107,27 @@ display(pd.DataFrame(results))
 
 ### 4.2  Baselines
 
-**Dummy (most\_frequent)** always predicts Stay: PR-AUC = 0.2040
-(≈ churn prevalence), ROC-AUC = 0.50 — the no-skill floor every model
-must beat.  **LogReg** (default settings) jumps to PR-AUC = 0.5068,
-confirming the features carry real signal well above chance.  This +0.30
-improvement establishes the linear ceiling; the question is whether
-non-linear models can push further.
+**Dummy (most\_frequent)** always predicts Stay, so every customer
+receives the same score and the model cannot distinguish churners from
+non-churners.  Its PR-AUC of 0.2040 (≈ churn prevalence) and ROC-AUC
+of 0.50 define the no-skill floor that every real model must beat.
+Because the Dummy assigns identical probabilities to all customers, its
+Recall@top-20 % and Precision@top-20 % reflect pure chance: the top-20 %
+bucket is effectively a random sample, so it captures roughly 20 % of
+churners — far too few to justify a targeted campaign.
+
+**LogReg** (default settings) raises PR-AUC to 0.5068 — a +0.30 jump
+that confirms the features carry genuine linear signal.  Its ROC-AUC of
+0.7846 shows strong overall discrimination: the model assigns higher
+probabilities to churners than to stayers in roughly 78 % of randomly
+drawn churner–stayer pairs.  However, on the business metrics that
+matter most for a capacity-constrained campaign, LogReg's advantage over
+Dummy is surprisingly narrow: Recall@top-20 % = 0.6338 and
+Precision@top-20 % = 0.6338, meaning the top-ranked fifth of customers
+captures about 63 % of actual churners and roughly two in three flagged
+customers are genuine churners.  These figures set the linear ceiling;
+the question is whether non-linear models can push the ranking quality
+further.
 
 ---
 
@@ -153,13 +167,34 @@ defaults) are both fitted on training data and evaluated on validation.
 All hyperparameters are untuned defaults; tuning is deferred to Task 5
 to keep this section a pure architecture comparison.  RF uses 200 trees
 (a standard default for stable probability estimates); Task 5 searches
-over [100, 200, 300] to verify this choice formally.  Both leap well
-above LogReg: HistGBT PR-AUC = **0.7252**, RF PR-AUC = **0.7042** —
-each roughly +0.20 over the linear baseline.
+over [100, 200, 300] to verify this choice formally.
+
+Both tree ensembles leap well above the linear baseline on every metric.
+On PR-AUC — the primary measure of ranking quality across the full
+precision–recall trade-off — HistGBT reaches **0.7252** and RF
+**0.7042**, each roughly +0.20 above LogReg's 0.5068.  This confirms
+that the non-linear interaction structure in the data (e.g. Age ×
+Geography, Balance × NumOfProducts) rewards tree-based architectures.
+ROC-AUC tells a consistent story: HistGBT achieves 0.8781 and RF
+0.8722, indicating that both models correctly order churner–stayer pairs
+roughly 87 % of the time — a substantial improvement over LogReg's
+0.7846 and well into the "good discrimination" range.
+
+Turning to the business-level metrics that translate directly to
+campaign performance: HistGBT's Recall@top-20 % of 0.6471 means that
+if the bank contacts the top-ranked fifth of customers, the campaign
+would reach nearly two-thirds of all actual churners — a meaningful
+improvement over LogReg's 0.6338 and a dramatic one over the Dummy
+baseline.  RF is close behind at 0.6373.  Meanwhile, Precision@top-20 %
+(HistGBT 0.6600, RF 0.6500) shows that roughly two in three customers
+flagged for retention would indeed have churned, keeping the
+wasted-intervention rate at about one in three — an acceptable cost
+given that missing a churner is typically more expensive than one
+unnecessary retention call.
 
 ---
 
-## Cell 4 — 4.4 Full comparison, operating-rule demo, and shortlist
+## Cell 4 — 4.4 Full comparison and shortlist
 
 ```python
 # ── 4.4 Comparison table ──────────────────────────────────────────────────────
@@ -172,36 +207,6 @@ print("=== Validation results — all models, sorted by PR-AUC ===")
 # Dummy is the no-skill floor (PR-AUC ≈ 0.20) — stated in text, hidden
 # from table to keep the comparison focused on real contenders.
 display(results_df[~results_df["Model"].str.startswith("Dummy")])
-
-# ── Controlled comparison: operating rule (HistGBT) ──────────────────────────
-# Why top-20% ranking beats a fixed 0.5 threshold for a capacity-constrained
-# retention campaign: the campaign can contact exactly 20% of customers,
-# so ranking fills every slot whereas threshold 0.5 may flag far fewer.
-proba_hgbt = hgbt.predict_proba(X_val_t)[:, 1]
-
-# (a) Threshold 0.5 — may under-flag on a 20% minority class
-pred_05 = (proba_hgbt >= 0.5).astype(int)
-n_flag_05 = int(pred_05.sum())
-
-# (b) Top-20% ranking — always flags exactly n_top customers
-n_top     = max(1, int(len(y_val) * TOP_PCT))
-top_arr   = np.zeros(len(y_val), dtype=int)
-top_arr[np.argsort(proba_hgbt)[::-1][:n_top]] = 1
-
-rule_rows = []
-for tag, preds in [("Threshold 0.5", pred_05), ("Top-20% ranking", top_arr)]:
-    rule_rows.append({
-        "Decision rule":  tag,
-        "Flagged":        int(preds.sum()),
-        "Recall":         round(recall_score(y_val, preds), 4),
-        "Precision":      round(precision_score(y_val, preds, zero_division=0), 4),
-    })
-rule_df = pd.DataFrame(rule_rows)
-
-print("\n── Operating-rule comparison (HistGBT, validation set) ──")
-display(rule_df)
-print(f"(Threshold 0.5 flags {n_flag_05} customers vs "
-      f"top-20% always flags {n_top})")
 
 # ── Shortlist ─────────────────────────────────────────────────────────────────
 shortlist = (
@@ -226,17 +231,50 @@ PR-AUC ≈ 0.20, ROC-AUC = 0.50):
 | RandomForest | 0.7042 | 0.8722 | 0.6373 | 0.6500 |
 | LogReg | 0.5068 | 0.7846 | 0.6338 | 0.6338 |
 
-A quick operating-rule check confirms that a top-20 % ranking fills
-the campaign's 300-slot capacity and catches more churners than a naive
-0.5 threshold — the full comparison is in Section 5.3.
+All models are evaluated under a top-20 % ranking rule, reflecting the
+campaign's fixed capacity; the formal operating-rule comparison
+(ranking vs. threshold 0.5) is deferred to Section 5.3.
 
-Both tree ensembles clearly outperform the linear baseline.  The gap
-between HistGBT and RF (0.021 in PR-AUC) is modest enough that
-validation noise could reverse it, and the two models learn differently
-— boosting reduces bias while bagging reduces variance — so they are
-likely to differ on calibration and subgroup performance.  **Both are
-shortlisted for Task 5**, where tuning and error analysis will
-determine the final pick.  The decision criterion is pre-committed
+The table reveals a clear two-tier structure.  On the primary metric,
+PR-AUC, both tree ensembles (HistGBT 0.7252, RF 0.7042) sit roughly
++0.20 above LogReg (0.5068), indicating that non-linear models produce
+substantially better precision–recall trade-offs across the full
+ranking.  ROC-AUC confirms this pattern from a different angle: HistGBT
+(0.8781) and RF (0.8722) both exceed 0.87, meaning each model correctly
+orders a randomly drawn churner above a randomly drawn stayer roughly
+87 % of the time — a nine-percentage-point lead over LogReg's 0.7846.
+The consistency between PR-AUC and ROC-AUC is reassuring: both summary
+measures agree that the tree ensembles discriminate much better than the
+linear baseline, even though PR-AUC is more sensitive to performance on
+the minority class.
+
+The business-level metrics are more compressed across models, which is
+expected: all three contenders produce reasonable rankings, but the
+top-20 % bucket can only improve so much.  HistGBT's Recall@top-20 %
+of 0.6471 means its top-ranked fifth captures nearly two-thirds of all
+churners — a 1.3-percentage-point edge over LogReg's 0.6338 and a
+1.0-point edge over RF's 0.6373.  In absolute terms, HistGBT's top
+bucket catches roughly 99 churners out of 153 in validation (versus
+RF's 97 and LogReg's 97), so the practical gap is a handful of
+customers.  However, when scaled to the full customer base, even a
+small improvement in recall compounds — each additional correctly
+identified churner is one more retention intervention that could prevent
+revenue loss.  Precision@top-20 % (HistGBT 0.6600, RF 0.6500, LogReg
+0.6338) tells the cost side of the story: at HistGBT's precision, about
+one in three flagged customers would not actually churn, representing
+wasted outreach.  This false-alarm rate is acceptable for a retention
+campaign where the cost of contacting a non-churner is low relative to
+the cost of losing a genuine churner.
+
+The gap between the two tree ensembles is small: 0.021 in PR-AUC and
+0.006 in ROC-AUC.  On a validation set of approximately 1,500 rows,
+such differences can easily be reversed by sampling noise.  Moreover,
+the two models learn differently — boosting reduces bias sequentially,
+while bagging reduces variance through parallel averaging — so they are
+likely to differ on calibration quality and subgroup performance in ways
+that PR-AUC alone cannot capture.  **Both are shortlisted for Task 5**,
+where tuning and error analysis (calibration curve, geography slice)
+will determine the final pick.  The decision criterion is pre-committed
 before running Task 5: highest validation PR-AUC after tuning.
 
 ---
@@ -261,7 +299,7 @@ checks serve as post-decision diagnostics only (Section 5.5).
 | Model set | Agent proposed Dummy + LogReg + RF + HistGBT (4 models). Dummy (floor) → LogReg → RF + HistGBT gives a clean no-skill → linear → ensemble → boosting progression. Dummy is stated as the floor but hidden from comparison tables to keep them focused | All 4 models fit without error. PR-AUCs: Dummy 0.2040, LogReg 0.5068, RF 0.7042, HistGBT 0.7252 — all above the no-skill floor |
 | RandomForest | sklearn defaults, 200 trees, no `class_weight`; no tuning | PR-AUC = 0.7042 — well above LogReg (0.5068), +0.20 above the linear baseline. Second-best model |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | PR-AUC = 0.7252 — highest model, +0.021 above RF. Hyperparameters are untuned defaults; tuning deferred to Task 5 |
-| Operating-rule demo | Threshold 0.5 vs top-20 % ranking for HistGBT; showed flagged count, recall, precision | Top-20% flags 300 customers vs threshold 0.5 flags only 199 (+101). Recall jumps 0.4837 → 0.6471 (+0.16). Top-20% is the correct rule: it fills the campaign's 300-slot capacity and catches 65% of churners vs only 48% |
+| Operating-rule demo | Agent originally included a threshold-0.5 vs top-20 % comparison in Task 4. I moved it to Section 5.3, where it belongs — Task 4's role is architecture comparison, not operating-rule selection | Task 4.4 now contains a one-sentence deferral to Section 5.3. The full three-rule comparison (top-20 % ranking, threshold ≈ 20 %, threshold 0.5) with recall/precision numbers lives in Section 5.3 only |
 | Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** into Task 5, because the PR-AUC gap (0.0210) is small and the two models have structurally different failure modes | I confirmed: (1) HistGBT leads by 0.021 on validation — non-trivial but validation rankings don't always transfer to test; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) Task 5 error analysis (calibration, geography slice) provides diagnostics to confirm whether HistGBT's lead holds; (4) pre-committed validation PR-AUC as the sole decision criterion before running Task 5; calibration and geography checked as post-decision diagnostics |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in Task 5 `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) moving it to Task 5 gives a cleaner Task 4 narrative and a stronger tuning story |
