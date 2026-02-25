@@ -1,0 +1,26 @@
+# Task 6 — Present the Final Solution
+
+---
+
+## A. Final Model Selection with Rationale
+
+The tuned HistGradientBoostingClassifier is selected as the final model, applied under a top-20% ranking rule that contacts the highest-risk fifth of the customer base. This choice was locked on validation PR-AUC (the pre-committed decision criterion) before the test set was accessed, and the test results confirm it. On the held-out test set, HistGBT achieves a PR-AUC of 0.7344 — comfortably above the no-skill baseline of approximately 0.20 and indicating strong ranking quality across the full precision–recall trade-off. At the operational cut-off (top 20% of predicted risk), the model captures 64.3% of actual churners (Recall@top-20% = 0.6426) with a precision of 0.6533, meaning roughly two in three customers flagged for retention are genuine churners. The geography diagnostic provides additional confidence: HistGBT's cross-country PR-AUC gap (max − min = 0.158) is narrower than the runner-up's (0.177), indicating more equitable performance across the three markets. The tuned RandomForest was a credible runner-up (test PR-AUC = 0.7079, Recall@top-20% = 0.6197), but it trails on both the primary metric and subgroup fairness, and its validation-to-test stability was weaker (Δ PR-AUC = −0.019 vs. +0.002 for HistGBT). Since all decisions were locked on validation, the runner-up's test performance cannot reopen selection — it is reported solely for transparency.
+
+## B. Limitations, Risks, and Next Steps
+
+**Data and evaluation limitations.** The model is trained on 10,000 customers from a single bank (Kaggle CC0 dataset) with ten features, none of which capture temporal behaviour such as transaction trends or recent service interactions. This limits the model's ability to detect early warning signals of churn that evolve over time. Furthermore, the evaluation relies on a random stratified train/validation/test split rather than a temporal out-of-time hold-out. In a production setting, the joint distribution of features and churn propensity is likely to shift over time — for example, due to new product launches or macroeconomic changes — and the current evaluation design cannot quantify that risk. The dataset's geographic scope (France, Germany, Spain) and feature set (no behavioural or engagement variables) also mean that the model should not be assumed to generalise to other banks, regions, or customer segments without fresh validation.
+
+**Operational risks and next steps.** Two risks warrant monitoring after deployment. First, calibration drift: the model's predicted probabilities may diverge from observed churn rates as the customer population evolves, which would degrade any threshold-based decision rule (though the top-20% ranking is robust to monotonic calibration shifts). Second, subgroup performance differences: the geography slice already shows that Germany's Recall@top-20% (0.5702) is materially lower than Spain's (0.7193), partly due to Germany's higher base churn rate creating a ceiling effect at the 20% budget. If the retention campaign has region-specific costs, separate per-region thresholds may be warranted. Recommended next steps include: (i) periodic recalibration using recent labelled data; (ii) temporal validation once time-stamped churn records become available; (iii) enriching the feature set with behavioural variables (e.g. login frequency, complaint history) to improve recall; and (iv) a cost-sensitive analysis that weights false negatives and false positives by their financial impact, which may shift the optimal operating point away from the fixed 20% rule.
+
+---
+
+## C. Model Card
+
+| Field | Detail |
+|-------|--------|
+| **Model** | HistGradientBoostingClassifier (scikit-learn), tuned via RandomizedSearchCV (8 iterations, 3-fold CV on training data, scoring = average precision). |
+| **Intended use** | Ranking bank customers by churn risk so that a fixed-capacity retention campaign (budget = top 20% of the customer base) contacts the highest-risk individuals first. |
+| **Not intended for** | Individual causal explanations of why a specific customer churns; real-time scoring requiring sub-millisecond latency; generalisation to banks, countries, or product lines outside the training distribution. |
+| **Data provenance and constraints** | 10,000 customers from a single bank (Kaggle "Bank Customer Churn" dataset, CC0 licence). Ten features: CreditScore, Age, Tenure, Balance, NumOfProducts, HasCrCard, IsActiveMember, EstimatedSalary, Geography, Gender. No temporal or behavioural features. Class balance: approximately 20% churn. |
+| **Evaluation summary (test)** | PR-AUC = 0.7344; ROC-AUC = 0.8737; Recall@top-20% = 0.6426; Precision@top-20% = 0.6533. Validation-to-test PR-AUC shift = +0.002 (stable). All decisions locked on validation; test accessed once for reporting only. |
+| **Key caveats and monitoring** | (1) Random split, not temporal — real-world drift is unquantified. (2) Geography gap: Germany Recall@top-20% = 0.5702 vs. Spain = 0.7193 — monitor per-region miss rates. (3) Calibration should be re-assessed periodically if threshold-based rules are adopted. (4) No behavioural features — predictive ceiling likely exists; richer data may improve recall. |
