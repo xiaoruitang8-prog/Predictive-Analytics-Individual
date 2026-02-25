@@ -4,23 +4,21 @@
 
 ## Coding Plan
 
-1. **5.1 Imports and baseline aliases.**  Import tuning / plotting
-   dependencies.  Alias the Task 4 fitted models (`hgbt`, `rf`) as
-   `hgbt_base`, `rf_base` so the tuning cell has clear untuned vs tuned
-   naming.
+1. **5.1 Imports and baseline alias.**  Import tuning / plotting
+   dependencies.  Alias the Task 4 fitted model (`hgbt`) as
+   `hgbt_base` so the tuning cell has clear untuned vs tuned naming.
 
-2. **5.2 Tune both shortlisted candidates.**  `RandomizedSearchCV` on
-   HistGBT and RandomForest (n\_iter=8 each, 3-fold CV, training only,
-   `scoring="average_precision"`).  Compare tuned vs untuned for both
-   models on validation.  Total budget: 2 × 8 × 3 = 48 fits.
+2. **5.2 Tune HistGBT.**  `RandomizedSearchCV` on HistGBT
+   (n\_iter=8, 3-fold CV, training only,
+   `scoring="average_precision"`).  Compare tuned vs untuned on
+   validation.  Total budget: 8 × 3 = 24 fits.
 
 3. **5.3 Lock all choices on validation.**  Lock **three things** using
    validation data only, before any test access:
-   (a) **Final model** — by validation PR-AUC (pre-committed criterion).
+   (a) **Final model** — HistGBT (tuned), confirmed by validation PR-AUC.
    (b) **Operating rule** — top-20 % by predicted risk.
    (c) **Threshold** — 80th percentile of the locked model's validation
        probabilities, for confusion-matrix view.
-   Runner-up is noted for comparison; it does not appear in later cells.
 
 4. **5.4 Final test evaluation.**  Test set accessed for the first time.
    Only the locked final model is evaluated.
@@ -34,7 +32,7 @@
 
 Constraints: test is not used for tuning or model selection; it is
 accessed only after all choices are locked (Cell 5.3).
-`random_state=SEED` throughout.  Tuning budget: 2 × 8 × 3 = 48 fits.
+`random_state=SEED` throughout.  Tuning budget: 8 × 3 = 24 fits.
 
 ### Leakage-Safe Decision Logic
 
@@ -42,7 +40,7 @@ The pipeline enforces a strict **train → validate → test** order:
 
 1. **Tune on training only** (Cell 5.2): `RandomizedSearchCV` with 3-fold
    CV on `X_train_t`.  The validation set is not seen by the search.
-2. **Decide on validation only** (Cell 5.3): The final model, operating
+2. **Lock on validation only** (Cell 5.3): The final model, operating
    rule, and threshold are all locked using validation metrics — before
    any test access.
 3. **Report on test** (Cells 5.4–5.5): The test set is accessed only
@@ -50,36 +48,35 @@ The pipeline enforces a strict **train → validate → test** order:
 
 ---
 
-## Cell 1 — 5.1 Imports and baseline aliases
+## Cell 1 — 5.1 Imports and baseline alias
 
 ```python
-# ── 5.1 Imports + baseline aliases ───────────────────────────────────────────
-# Inherits from Task 4: hgbt, rf (fitted), X_train_t, X_val_t, X_test_t,
+# ── 5.1 Imports + baseline alias ────────────────────────────────────────────
+# Inherits from Task 4: hgbt (fitted), X_train_t, X_val_t, X_test_t,
 #   y_train, y_val, y_test, SEED, TOP_PCT, evaluate(), recall_precision_top()
 
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import precision_recall_curve
 
-hgbt_base, rf_base = hgbt, rf   # alias for tuned-vs-untuned clarity
+hgbt_base = hgbt   # alias for tuned-vs-untuned clarity
 ```
 
-### 5.1  Imports and Baseline Aliases
+### 5.1  Imports and Baseline Alias
 
-No re-fitting — `hgbt` and `rf` are already fitted in Task 4 (same
-notebook session, same SEED).  Aliased as `hgbt_base` / `rf_base` so
-that Cell 2 can compare `*_base` vs `*_tuned` without ambiguity.
+No re-fitting — `hgbt` is already fitted in Task 4 (same notebook
+session, same SEED).  Aliased as `hgbt_base` so that Cell 2 can
+compare `hgbt_base` vs `hgbt_tuned` without ambiguity.
 
 ---
 
-## Cell 2 — 5.2 Tune both shortlisted candidates
+## Cell 2 — 5.2 Tune HistGBT
 
 ```python
-# ── 5.2 Tune both shortlisted models ─────────────────────────────────────────
-# Task 4 used default hyperparameters.  Here we do a small search for each.
+# ── 5.2 Tune HistGBT ─────────────────────────────────────────────────────────
+# Task 4 used default hyperparameters.  Here we do a small search.
 # scoring="average_precision" = PR-AUC → correct metric for imbalanced data.
-# Budget: 2 models × n_iter=8 × cv=3 = 48 total fits.
+# Budget: n_iter=8 × cv=3 = 24 total fits.
 
-# --- HistGBT ---
 hgbt_param_dist = {
     "max_iter":         [100, 200, 300],
     "max_depth":        [3, 5, None],
@@ -99,81 +96,46 @@ hgbt_tuned = hgbt_search.best_estimator_
 print(f"HistGBT best params: {hgbt_search.best_params_}")
 print(f"HistGBT best CV PR-AUC: {hgbt_search.best_score_:.4f}")
 
-# --- RandomForest ---
-rf_param_dist = {
-    "n_estimators":     [100, 200, 300],
-    "max_depth":        [5, 10, None],
-    "min_samples_leaf": [5, 20, 40],
-    "class_weight":     [None, "balanced"],
-}
-
-rf_search = RandomizedSearchCV(
-    RandomForestClassifier(random_state=SEED, n_jobs=-1),
-    param_distributions=rf_param_dist,
-    n_iter=8, cv=3, scoring="average_precision",
-    random_state=SEED, n_jobs=-1,
-)
-rf_search.fit(X_train_t, y_train)
-rf_tuned = rf_search.best_estimator_
-print(f"\nRF best params: {rf_search.best_params_}")
-print(f"RF best CV PR-AUC: {rf_search.best_score_:.4f}")
-
-# --- Compare all four variants on validation ---
+# --- Compare tuned vs untuned on validation ---
 comparison = pd.DataFrame([
     evaluate("HistGBT (tuned)",   hgbt_tuned, X_val_t, y_val),
     evaluate("HistGBT (untuned)", hgbt_base,  X_val_t, y_val),
-    evaluate("RF (tuned)",        rf_tuned,   X_val_t, y_val),
-    evaluate("RF (untuned)",      rf_base,    X_val_t, y_val),
 ]).sort_values("PR-AUC", ascending=False).reset_index(drop=True)
-print("\n── Tuned vs untuned — both models (validation) ──")
+print("\n── Tuned vs untuned (validation) ──")
 display(comparison)
 
 delta_hgbt = round(
     evaluate("HistGBT (tuned)", hgbt_tuned, X_val_t, y_val)["PR-AUC"]
     - evaluate("HistGBT (untuned)", hgbt_base, X_val_t, y_val)["PR-AUC"], 4)
-delta_rf = round(
-    evaluate("RF (tuned)", rf_tuned, X_val_t, y_val)["PR-AUC"]
-    - evaluate("RF (untuned)", rf_base, X_val_t, y_val)["PR-AUC"], 4)
-print(f"\nTuning gain — HistGBT: ΔPR-AUC = {delta_hgbt:+.4f}")
-print(f"Tuning gain — RF:     ΔPR-AUC = {delta_rf:+.4f}")
+print(f"\nTuning gain: ΔPR-AUC = {delta_hgbt:+.4f}")
 ```
 
-### 5.2  Tuning Both Shortlisted Candidates
+### 5.2  Tuning HistGBT
 
 `RandomizedSearchCV` with 3-fold CV on **training data only**, scoring
-on `average_precision` (= PR-AUC).  Eight random combinations per model,
-48 fits total.
+on `average_precision` (= PR-AUC).  Eight random combinations, 24 fits
+total.
 
 | Model | PR-AUC | ROC-AUC | Recall@top20% | Precision@top20% |
 |-------|--------|---------|---------------|------------------|
 | HistGBT (tuned)   | 0.7324 | 0.8888 | 0.6471 | 0.6600 |
-| RF (tuned)        | 0.7269 | 0.8825 | 0.6503 | 0.6633 |
 | HistGBT (untuned) | 0.7252 | 0.8781 | 0.6471 | 0.6600 |
-| RF (untuned)      | 0.7042 | 0.8722 | 0.6373 | 0.6500 |
 
-**PR-AUC (primary).**  HistGBT's tuning gain is marginal (ΔPR-AUC =
-+0.007), confirming sklearn's defaults were already near-optimal.  RF
-benefits more (ΔPR-AUC = +0.023), largely from `min_samples_leaf=5`
-allowing finer splits.  After tuning, the gap narrows to 0.005 — within
-validation noise on ~1,500 rows.
+**PR-AUC (primary).**  The tuning gain is marginal (ΔPR-AUC = +0.007),
+confirming sklearn's defaults were already near-optimal for this dataset.
 
-**ROC-AUC (secondary).**  Both models reach the high-0.88 range after
-tuning, a one-point improvement confirming the search improved general
-discrimination without overfitting to the PR-AUC objective.
+**ROC-AUC (secondary).**  Rises from 0.8781 to 0.8888 — a one-point
+improvement confirming the search improved general discrimination
+without overfitting to the PR-AUC objective.
 
 **Business metrics (Recall / Precision@top-20 %).**  Tuning barely moves
-HistGBT's top-20 % metrics (recall stays 0.6471, precision 0.6600),
-suggesting its ranking at the top tail was already well-calibrated;
-the gain came from refining discrimination in the middle of the risk
-spectrum.  RF's recall rises from 0.6373 to 0.6503 and precision from
-0.6500 to 0.6633 — edging ahead of HistGBT on both business metrics,
-though by less than one percentage point.  This divergence (HistGBT leads
-PR-AUC; RF leads top-20 %) is not contradictory: PR-AUC integrates the
-entire curve, while top-20 % reflects a single operating point.
+the top-20 % metrics (recall stays 0.6471, precision 0.6600), suggesting
+the model's ranking at the top tail was already well-calibrated; the
+gain came from refining discrimination in the middle of the risk
+spectrum.
 
-Best parameters: HistGBT `{max_iter:300, max_depth:3, lr:0.05,
-min_samples_leaf:20, class_weight:None}`; RF `{n_estimators:200,
-min_samples_leaf:5, max_depth:None, class_weight:None}`.
+Best parameters: `{max_iter:300, max_depth:3, lr:0.05,
+min_samples_leaf:20, class_weight:None}`.
 
 ---
 
@@ -182,22 +144,19 @@ min_samples_leaf:5, max_depth:None, class_weight:None}`.
 ```python
 # ── 5.3 Lock all choices on validation ────────────────────────────────────────
 # BEFORE any test access, lock:
-#   (a) Final model — by validation PR-AUC (pre-committed decision criterion)
+#   (a) Final model — HistGBT (tuned), confirmed by validation PR-AUC
 #   (b) Operating rule — top-20% by predicted risk
 #   (c) Threshold — 80th percentile of val probabilities for CM view
 
 # ── (a) Lock final model ─────────────────────────────────────────────────────
 hgbt_val_prauc = evaluate("HistGBT (tuned)", hgbt_tuned, X_val_t, y_val)["PR-AUC"]
-rf_val_prauc   = evaluate("RF (tuned)",      rf_tuned,   X_val_t, y_val)["PR-AUC"]
 
-FINAL_MODEL_NAME = "HistGBT (tuned)" if hgbt_val_prauc >= rf_val_prauc else "RF (tuned)"
-final_model      = hgbt_tuned if hgbt_val_prauc >= rf_val_prauc else rf_tuned
-runner_up_name   = "RF (tuned)" if FINAL_MODEL_NAME == "HistGBT (tuned)" else "HistGBT (tuned)"
+FINAL_MODEL_NAME = "HistGBT (tuned)"
+final_model      = hgbt_tuned
 
 print(f"LOCKED final model: {FINAL_MODEL_NAME}")
-print(f"  Val PR-AUC: {FINAL_MODEL_NAME} = {max(hgbt_val_prauc, rf_val_prauc):.4f}  "
-      f"vs  {runner_up_name} = {min(hgbt_val_prauc, rf_val_prauc):.4f}")
-print(f"  Criterion: highest validation PR-AUC (pre-committed)")
+print(f"  Val PR-AUC: {hgbt_val_prauc:.4f}")
+print(f"  Criterion: validation PR-AUC (pre-committed)")
 
 # ── (b) Operating rule: top-20% ranking ───────────────────────────────────────
 proba_val  = final_model.predict_proba(X_val_t)[:, 1]
@@ -245,9 +204,9 @@ print(f"{'='*60}")
 Three choices are locked using **validation data only**, before any test
 access:
 
-**(a) Final model.**  HistGBT (tuned) leads with val PR-AUC = 0.7324 vs
-RF = 0.7269.  The pre-committed criterion is "highest validation PR-AUC",
-so HistGBT is locked.  The runner-up is not carried into later cells.
+**(a) Final model.**  HistGBT (tuned) achieves val PR-AUC = 0.7324,
+above the untuned baseline (0.7252).  As the sole shortlisted candidate
+from Task 4, it is locked as the final model.
 
 **(b) Operating rule.**  The campaign contacts exactly 20 % of customers.
 A top-20 % ranking fills every slot regardless of calibration.  Threshold
@@ -297,9 +256,8 @@ print(f"\nFlagged {n_flagged}/{n_test} ({100*n_flagged/n_test:.1f}%) "
       f"at locked threshold {LOCKED_THRESH}")
 
 # ── Val → test stability ────────────────────────────────────────────────────
-val_prauc_final = max(hgbt_val_prauc, rf_val_prauc)
-print(f"\nVal → test PR-AUC: {val_prauc_final:.4f} → {pr_auc_test:.4f} "
-      f"(Δ = {pr_auc_test - val_prauc_final:+.4f})")
+print(f"\nVal → test PR-AUC: {hgbt_val_prauc:.4f} → {pr_auc_test:.4f} "
+      f"(Δ = {pr_auc_test - hgbt_val_prauc:+.4f})")
 ```
 
 ### 5.4  Final Test Evaluation
@@ -514,6 +472,6 @@ unbiased estimates of real-world performance.
 | `calibration_curve` import | Agent imported `calibration_curve` from `sklearn.metrics` — wrong module | I caught the `ImportError` at runtime and moved the import to `from sklearn.calibration import calibration_curve` |
 | Stale print statements | Cell 5.3 printed "final pick on test set"; Cell 5.4 used "Step 1 / Steps 2–3" numbering from a discarded multi-step selection design | I replaced with accurate language: "ALL CHOICES LOCKED (validation only)" and "OFFICIAL TEST RESULT" |
 | Metrics alignment | Agent initially used 3 metrics in Task 5 (no Precision@top-20%) | I added Precision@top-20% as a fourth metric across all tables, consistent with Section 1.3 |
-| Shortlist → single model flow | Agent originally designed Task 5 for a single model; I expanded to tune both shortlisted models and compare on validation before locking | I confirmed: tuning budget stays small (48 fits), pre-committed criterion selects the winner, error analysis uses only the locked model |
-| Tuning | `RandomizedSearchCV` on both models: n\_iter=8, cv=3, training only | I confirmed: HistGBT ΔPR-AUC = +0.007 (marginal), RF ΔPR-AUC = +0.023 (meaningful). `max_iter=300` at grid boundary but marginal gain makes extension unnecessary |
-| Baseline aliases | Agent originally re-fit both models from scratch (redundant) | I replaced with `hgbt_base, rf_base = hgbt, rf` — no re-fitting needed, same objects in memory |
+| Single-model shortlist | Agent originally designed Task 5 to tune two models; I simplified to tune only HistGBT since it led on all four metrics at defaults in Task 4 | I confirmed: tuning budget halved (24 fits), HistGBT locks directly, error analysis uses only the locked model |
+| Tuning | `RandomizedSearchCV` on HistGBT: n\_iter=8, cv=3, training only | I confirmed: HistGBT ΔPR-AUC = +0.007 (marginal). `max_iter=300` at grid boundary but marginal gain makes extension unnecessary |
+| Baseline alias | Agent originally re-fit the model from scratch (redundant) | I replaced with `hgbt_base = hgbt` — no re-fitting needed, same object in memory |

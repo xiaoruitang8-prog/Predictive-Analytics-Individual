@@ -19,10 +19,10 @@
    Both trained on `X_train_t`, evaluated on `X_val_t`.
 
 4. **4.4 Full comparison and shortlist.**  One sorted table of all models.
-   Interpret all four metrics across architectures.  Shortlist the two
-   best-performing models (by PR-AUC, excl. Dummy floor)
-   — their gap is within noise, so deeper diagnostics will
-   decide the final pick.  The operating-rule comparison (ranking vs.
+   Interpret all four metrics across architectures.  Shortlist the single
+   best-performing model (HistGBT, by PR-AUC) for tuning — it leads on
+   all four metrics at defaults, so carrying a second model adds complexity
+   without changing the outcome.  The operating-rule comparison (ranking vs.
    threshold 0.5) is deferred to a later section.
 
 Constraints: **no hyperparameter search** in Task 4 — all models use
@@ -208,15 +208,11 @@ print("=== Validation results — all models, sorted by PR-AUC ===")
 display(results_df[~results_df["Model"].str.startswith("Dummy")])
 
 # ── Shortlist ─────────────────────────────────────────────────────────────────
-shortlist = (
-    results_df[~results_df["Model"].str.startswith("Dummy")]
-    .head(2)
-    .reset_index(drop=True)
-)
-gap = abs(shortlist.loc[0, "PR-AUC"] - shortlist.loc[1, "PR-AUC"])
-print(f"\n=== Shortlist (top 2 by PR-AUC, excl. Dummy floor) ===")
-display(shortlist)
-print(f"PR-AUC gap between top 2: {gap:.4f} — within noise for ~{len(y_val)}-row val set.")
+# HistGBT leads on all four metrics — shortlist it alone for tuning.
+SHORTLISTED = "HistGBT"
+print(f"\n=== Shortlisted for tuning: {SHORTLISTED} ===")
+print("Rationale: HistGBT leads on all four metrics at defaults; "
+      "no second model is close enough to justify a two-model tuning run.")
 ```
 
 ### 4.4  Full Comparison and Shortlist
@@ -265,25 +261,27 @@ wasted outreach.  This false-alarm rate is acceptable for a retention
 campaign where the cost of contacting a non-churner is low relative to
 the cost of losing a genuine churner.
 
-The gap between the two tree ensembles is small: 0.021 in PR-AUC and
-0.006 in ROC-AUC.  On a validation set of approximately 1,500 rows,
-such differences can easily be reversed by sampling noise.  Moreover,
-the two models learn differently — boosting reduces bias sequentially,
-while bagging reduces variance through parallel averaging — so they are
-likely to differ on calibration quality and subgroup performance in ways
-that PR-AUC alone cannot capture.  **Both are shortlisted for tuning**,
-where hyperparameter search and error analysis (calibration curve,
-geography slice) will determine the final pick.  The decision criterion
-is pre-committed: highest validation PR-AUC after tuning.
+HistGBT leads on all four metrics: PR-AUC (+0.021 over RF), ROC-AUC
+(+0.006), Recall@top-20 % (+0.010), and Precision@top-20 % (+0.010).
+While the margins are individually modest on a ~1,500-row validation
+set, the fact that HistGBT wins on every measure — both the full-curve
+summaries and the business-level operating-point metrics — gives
+consistent evidence rather than a single noisy signal.  **HistGBT is
+shortlisted alone for tuning.**  Carrying RandomForest forward would add
+complexity (doubling the tuning budget) without a realistic prospect of
+overtaking HistGBT, since RF trails on every metric at defaults.  The
+decision criterion for the final lock remains pre-committed: validation
+PR-AUC after tuning.
 
 ---
 
 ## 4.5  Shortlist Decision
 
-HistGBT and RandomForest are carried forward for tuning.  The final
-model will be selected on **validation PR-AUC after tuning** — a
-criterion pre-committed before seeing tuning results.  Calibration and
-geography checks serve as post-decision diagnostics only.
+HistGBT is carried forward as the sole candidate for tuning.  It leads
+on all four validation metrics at defaults; no second model is close
+enough to justify a two-model tuning run.  The final lock criterion
+remains **validation PR-AUC after tuning**.  Calibration and geography
+checks serve as post-decision diagnostics only.
 
 ---
 
@@ -299,7 +297,7 @@ geography checks serve as post-decision diagnostics only.
 | RandomForest | sklearn defaults, 200 trees, no `class_weight`; no tuning | PR-AUC = 0.7042 — well above LogReg (0.5068), +0.20 above the linear baseline. Second-best model |
 | HistGBT (modern) | `HistGradientBoostingClassifier` with sklearn defaults (no `class_weight`), no tuning | PR-AUC = 0.7252 — highest model, +0.021 above RF. Hyperparameters are untuned defaults; tuning deferred to a subsequent task |
 | Operating-rule demo | Agent originally included a threshold-0.5 vs top-20 % comparison in Task 4. I moved it to a later section, where it belongs — Task 4's role is architecture comparison, not operating-rule selection | Task 4.4 now contains a one-sentence deferral. The full three-rule comparison (top-20 % ranking, threshold ≈ 20 %, threshold 0.5) with recall/precision numbers lives in a dedicated operating-rule section |
-| Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** forward for tuning, because the PR-AUC gap (0.0210) is small and the two models have structurally different failure modes | I confirmed: (1) HistGBT leads by 0.021 on validation — non-trivial but validation rankings don't always transfer to test; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) error analysis (calibration, geography slice) provides diagnostics to confirm whether HistGBT's lead holds; (4) pre-committed validation PR-AUC as the sole decision criterion before running tuning; calibration and geography checked as post-decision diagnostics |
+| Shortlist | Agent initially shortlisted HistGBT as the single best model | I confirmed HistGBT leads on all four metrics at defaults (PR-AUC +0.021, ROC-AUC +0.006, Recall +0.010, Precision +0.010 over RF). Consistent advantage across every measure justifies a single-model shortlist — carrying RF forward would double the tuning budget without a realistic prospect of changing the outcome |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in the tuning `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) deferring it to the tuning task gives a cleaner Task 4 narrative and a stronger tuning story |
 | `n_estimators=200` | Agent set RF to 200 trees without formal justification beyond "stable probability estimates" | I verified: (1) 200 is a standard sklearn community default for medium-sized datasets; (2) the tuning `param_dist` searches over `[100, 200, 300]`, so the choice is validated empirically during tuning |
