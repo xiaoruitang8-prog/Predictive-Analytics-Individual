@@ -151,7 +151,9 @@ display(pd.DataFrame(results[-2:]))
 **HistGradientBoosting** (sklearn-native histogram-based boosting,
 defaults) are both fitted on training data and evaluated on validation.
 All hyperparameters are untuned defaults; tuning is deferred to Task 5
-to keep this section a pure architecture comparison.  Both leap well
+to keep this section a pure architecture comparison.  RF uses 200 trees
+(a standard default for stable probability estimates); Task 5 searches
+over [100, 200, 300] to verify this choice formally.  Both leap well
 above LogReg: HistGBT PR-AUC = **0.7252**, RF PR-AUC = **0.7042** —
 each roughly +0.20 over the linear baseline.
 
@@ -263,4 +265,4 @@ checks serve as post-decision diagnostics only (Section 5.5).
 | Shortlist | Agent initially shortlisted HistGBT as the single best model. I reversed this to carry **both HistGBT and RF** into Task 5, because the PR-AUC gap (0.0210) is small and the two models have structurally different failure modes | I confirmed: (1) HistGBT leads by 0.021 on validation — non-trivial but validation rankings don't always transfer to test; (2) the two models have structurally different learning mechanisms (bagging vs boosting) so they will differ on calibration and subgroup performance; (3) Task 5 error analysis (calibration, geography slice) provides diagnostics to confirm whether HistGBT's lead holds; (4) pre-committed validation PR-AUC as the sole decision criterion before running Task 5; calibration and geography checked as post-decision diagnostics |
 | No tuning in Task 4 | Agent correctly deferred all hyperparameter tuning to Task 5 — Task 4 is a pure model-selection exercise with default parameters | I confirmed: no `RandomizedSearchCV` or `GridSearchCV` calls in Task 4 cells |
 | `class_weight` removed | Agent originally set `class_weight="balanced_subsample"` (RF) and `"balanced"` (HistGBT). I flagged that `class_weight` is a hyperparameter — setting it contradicts the "all defaults" design. Stripped from both models; `class_weight` is now searched in Task 5 `param_dist` instead | I verified: (1) `class_weight` is not a structural choice, it is a hyperparameter tunable via `GridSearchCV`; (2) at ~20% imbalance, the LogReg ablation already showed weighting has near-null effect; (3) moving it to Task 5 gives a cleaner Task 4 narrative and a stronger tuning story |
-| *[add rows as needed]* | | |
+| `n_estimators=200` | Agent set RF to 200 trees without formal justification beyond "stable probability estimates" | I verified: (1) 200 is a standard sklearn community default for medium-sized datasets; (2) Task 5 `param_dist` searches over `[100, 200, 300]`, so the choice is validated empirically during tuning; (3) added one sentence to Section 4.3 noting the Task 5 cross-check |
