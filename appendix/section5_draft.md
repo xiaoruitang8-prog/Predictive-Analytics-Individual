@@ -190,8 +190,8 @@ gain is already small so extending is unlikely to help.  RF's
 search could have preferred a shallower depth but did not.
 
 On validation PR-AUC, HistGBT (tuned) leads at 0.7324 vs RF (tuned)
-0.7269 — a gap of 0.0055, still within noise.  The final selection
-uses test metrics (Cell 5.4), not validation.
+0.7269 — a gap of 0.0055, still within noise.  The final model is
+locked on validation in Cell 5.3; test is used only for reporting.
 
 ---
 
