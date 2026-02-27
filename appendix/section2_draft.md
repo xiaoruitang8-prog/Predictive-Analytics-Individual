@@ -271,7 +271,7 @@ leaks information about the target and that identifier columns are excluded.
 Two notebook cells:
 1. **Correlation heatmap** — visual overview of inter-feature correlations
    and feature–target relationships.
-2. **Leakage threshold check** — systematic test for |r| > 0.8 with `Exited`.
+2. **Leakage threshold check** — systematic test for |r| > 0.6 with `Exited`.
 
 ### Correlation Heatmap
 
@@ -316,23 +316,23 @@ correlation with the target — which would indicate data leakage.
 *Code (notebook cell — runs after heatmap).*
 ```python
 corr_with_target = corr[TARGET].drop(TARGET).abs().sort_values(ascending=False)
-threshold = 0.8
+threshold = 0.6
 suspects = corr_with_target[corr_with_target > threshold]
 print("Absolute correlation with target:")
 print(corr_with_target.round(3))
 print()
 if suspects.empty:
-    print("No correlation based leakage flagged (no feature has |r| > 0.8).")
+    print("No correlation based leakage flagged (no feature has |r| > 0.6).")
 else:
-    print("Potential leakage features (|r| > 0.8):", list(suspects.index))
+    print("Potential leakage features (|r| > 0.6):", list(suspects.index))
 ```
 
 *Interpretation (fill after running).*
 > - Highest |correlation with Exited|: `[top_corr_feature]`
 >   (|r| = **[top_corr_val]**).
-> - [If all < 0.8: "No feature exceeds the |r| > 0.8 leakage threshold.
+> - [If all < 0.6: "No feature exceeds the |r| > 0.6 leakage threshold.
 >   Leakage via linear correlation is unlikely."]
-> - [If any > 0.8: "**Warning**: `[feature]` has |r| = [val].
+> - [If any > 0.6: "**Warning**: `[feature]` has |r| = [val].
 >   Investigate whether this feature would be available at prediction
 >   time before proceeding to modelling."]
 
@@ -353,7 +353,7 @@ must be confirmed or ruled out by running the notebook on the full dataset.
 | 4 | **ID columns present**: do `RowNumber`, `CustomerId`, `Surname` remain in the raw dataframe? | `df.columns.tolist()` | [confirmed — must be dropped in Task 3] |
 | 5 | **`Surname` cardinality**: high-cardinality string column that would need encoding or removal | `df["Surname"].nunique()` | [confirmed / not confirmed] |
 | 6 | **`NumOfProducts` rare categories**: are there products = 3 or 4 with very few rows? | `df["NumOfProducts"].value_counts()` | [confirmed / not confirmed] |
-| 7 | **No leakage features**: does any feature have |r| > 0.8 with `Exited`? | Leakage threshold check — see Section 2.6 | [confirmed / not confirmed] |
+| 7 | **No leakage features**: does any feature have |r| > 0.6 with `Exited`? | Leakage threshold check — see Section 2.6 | [confirmed / not confirmed] |
 | 8 | **Geography imbalance**: are the three countries represented roughly equally? | `df["Geography"].value_counts()` — visible in `df.describe(include="all")` and Section 2.4 | [confirmed / not confirmed] |
 | 9 | **Age outliers**: are there extreme ages (e.g., < 18 or > 90)? | `df["Age"].describe()` — see Section 2.5 | **Confirmed** — many values above ~70 visible beyond the upper whisker; robust scaling or winsorisation recommended for linear models |
 | 10 | **CreditScore range**: does it fall within typical bounds (300–850)? | `df["CreditScore"].describe()` — see Section 2.3 | [confirmed / not confirmed] |
@@ -398,7 +398,7 @@ the notebook and cross-checking against the raw data.
 | Section 2 draft structure | Agent drafted original with letter-based numbering (2A, 2B.1, 2B.2 etc.) and a different ordering: distributions → missingness → correlations → leakage → categories → class balance → outliers (Log #12, Decision #13). Redrafted multiple times as scope changed (Logs #15, #16, #26) | Caught the `NumOfProducts` error — draft claimed a finding the distributions plot cannot support (Decision #14). Filled all `[placeholders]` after running the full notebook |
 | Data-quality checks (Section 2.7) | Agent listed 12 checks framed as hypotheses with a status column for auditable tracking (Log #12, Decision #13) | Confirmed or ruled out each check by running the validation commands on the full dataset. Updated each status cell with result and evidence |
 | Outlier analysis (Section 2.5) | Agent integrated boxplot observations into unified per-feature paragraphs and an outlier severity table. Added three new actions (#11–#13) to Section 2.7 covering Balance heavy-tail, CreditScore monitoring, and L1/L2 regularisation | I provided the raw boxplot observations; reviewed the agent's merged write-up against my notes and the actual plot output to verify accuracy of claims and severity ratings |
-| Leakage section (Section 2.6) | Agent drafted heatmap and leakage check as a single combined section, then split them but added an over-engineered domain-sense dictionary (Log #18, Decision #18) | I identified the repetition and split them into two focused cells. I wrote both notebook cells myself — heatmap uses `ax.imshow` with annotated correlation values; leakage check re-uses `corr` and flags |r| > 0.8. Dropped agent's domain-sense dictionary in favour of simpler threshold-based check |
+| Leakage section (Section 2.6) | Agent drafted heatmap and leakage check as a single combined section, then split them but added an over-engineered domain-sense dictionary (Log #18, Decision #18) | I identified the repetition and split them into two focused cells. I wrote both notebook cells myself — heatmap uses `ax.imshow` with annotated correlation values; leakage check re-uses `corr` and flags |r| > 0.6 (threshold lowered from 0.8 after reviewing academic resources). Dropped agent's domain-sense dictionary in favour of simpler threshold-based check |
 | Categorical churn rate plot (Section 2.4) | Agent proposed this in the 10-plot plan, then dropped it after rubric review (Decision #16). Later suggested a printed table as a minimal alternative (Log #26) | I decided a bar-chart plot is clearer than a printed table — the visual format makes category-level churn-rate gaps immediately obvious. Wrote the 4-panel code myself (Decision #27) |
 | **EDA ordering and numbering** | **Agent used letter-based numbering (2A, 2B.1 etc.) and a different section order through all drafts** (Logs #12, #15, #16, #26) | **I reorganised to a more logical analytical flow** (Decision #28): class imbalance first (sets evaluation context) → missingness (cleaning needs) → distributions (feature shapes) → categorical rates (segment insights) → outliers (modelling concerns) → leakage (final sanity check). Changed numbering from letter-based (2A, 2B.1) to decimal (2.1, 2.2). Merged old data-quality checks and actions into single Section 2.7 |
 | *[add rows as project progresses]* | | |
