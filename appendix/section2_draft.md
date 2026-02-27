@@ -129,16 +129,34 @@ df[["CreditScore", "Age", "Tenure", "Balance",
 Confirm min/max/mean align with what the histograms show.
 
 *Interpretation (fill after running).*
-> - `Age`: ranges from **[age_min]** to **[age_max]**, roughly
->   **[age_shape]**-shaped.
-> - `Balance`: **[zero_bal_pct]%** of values are exactly zero, creating a
->   spike at zero; the remaining values are approximately
->   **[bal_shape]**-distributed.
-> - `CreditScore`: ranges **[cs_min]**–**[cs_max]**, approximately normal.
-> - `Tenure`: approximately **[tenure_shape]**-distributed across
->   0–**[tenure_max]** years.
-> - `EstimatedSalary`: appears roughly **[salary_shape]**-distributed
->   between **[salary_min]** and **[salary_max]**.
+
+> Figure 2 shows the distributions of five continuous numerical features,
+> highlighting heterogeneity across customers and several modelling
+> pitfalls.
+>
+> **Age** is right-skewed with a long upper tail: a small group of older
+> customers (above ~70) sit well beyond the bulk of the distribution.
+> These extreme values may make linear models more sensitive to outliers,
+> pulling coefficients and inflating variance.
+>
+> **Balance** follows a bimodal distribution — **[zero_bal_pct]%** of
+> values are exactly zero, creating a substantial mass at the left edge,
+> while the remaining values form a roughly normal upper spread.  A
+> single linear term cannot represent this two-regime structure and is
+> likely to underfit.
+>
+> **Tenure**, **CreditScore**, and **EstimatedSalary** are approximately
+> uniform.  Uniformity implies weak marginal signal in isolation —
+> no single value range strongly predicts churn on its own — and suggests
+> a greater reliance on feature interactions.  Models that evaluate
+> features independently (e.g., naïve Bayes) may therefore underestimate
+> their contribution.
+>
+> Finally, these five features differ substantially in scale (e.g.,
+> Balance in the tens of thousands vs. Tenure in single digits).  Without
+> consistent scaling, scale-sensitive models (logistic regression, MLP,
+> KNN) may face optimisation difficulties, and their coefficients or
+> distances become difficult to compare.
 
 ---
 
