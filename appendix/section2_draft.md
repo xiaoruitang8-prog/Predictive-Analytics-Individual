@@ -211,15 +211,17 @@ plt.show()
 
 ## 2.5  Outliers
 
-*Why here.*  With distributions and categorical patterns understood, we
-now look for extreme values that may affect model performance, and examine
-how feature distributions shift between churners and non-churners.
+*Why here.*  Section 2.3 established feature shapes and modelling
+pitfalls from the overall distributions.  The boxplots here add a
+dimension that histograms cannot show: **how each feature's distribution
+shifts between churners and non-churners**, revealing which features
+carry discriminatory signal and where extreme values concentrate by
+class.
 
 *What to look at.*  Side-by-side boxplots of each continuous feature split
-by `Exited` (0 vs 1).  Look for distributional shifts: features where the
-median, IQR, or outlier pattern differs between churners and non-churners
-are likely informative predictors.  Outlier dots beyond the whiskers flag
-extreme values.
+by `Exited` (0 vs 1).  Compare medians, IQRs, and outlier dots between
+the two groups.  Features where the boxes separate visually are likely
+informative predictors.
 
 *Dataframe validation.*
 ```python
@@ -229,41 +231,39 @@ df.groupby("Exited")[["CreditScore", "Age", "Tenure", "Balance",
 
 *Interpretation.*
 
-> **Age — clearest separation.**  The churned group has a noticeably
-> higher median age and IQR than the retained group, confirming that churn
-> risk increases with age.  Many data points sit above the upper whisker in
-> both groups, indicating a long upper tail with genuine outliers (ages
-> above ~70).  The distributional shift suggests churn may change across
-> life stages — tree-based models will capture this non-linearity better
-> than a purely linear term.
+> **Age — clearest class separation.**  The churned group has a
+> noticeably higher median and IQR than the retained group, confirming
+> that churn risk increases with age.  The right-skew and upper-tail
+> outliers noted in Section 2.3 are present in both groups, but the
+> entire churned distribution sits higher — this is a strong predictor.
 >
-> **Balance — wide spread, zero-inflated.**  Both groups show a very wide
-> IQR, with the churned group sitting slightly higher overall.  Extreme
-> high values appear above the whiskers, confirming that Balance is
-> heavy-tailed.  A large cluster of zero-balance customers is visible as
-> outlier dots near 0, creating a bimodal distribution (also visible in
-> Section 2.3).  This zero-inflated pattern may warrant special treatment
-> (see Section 2.7, action #3).
+> **Balance — class shift despite bimodality.**  The churned group's
+> median and IQR sit higher than the retained group's.  The
+> zero-inflation spike identified in Section 2.3 appears as a dense
+> cluster of dots near zero in the retained group — suggesting that
+> zero-balance customers churn less, adding predictive signal beyond
+> the shape issue.
 >
-> **CreditScore — weak discriminator.**  Distributions overlap
-> substantially between churned and retained customers, indicating limited
-> discriminatory power on its own.  A small number of unusually low scores
-> (~400) appear as outlier dots, but medians and IQRs are nearly identical
-> across both classes.
+> **CreditScore — weak class separation.**  Medians and IQRs are nearly
+> identical across both classes.  Limited discriminatory power on its
+> own.
 >
-> **EstimatedSalary — near-identical distributions.**  Boxplots are
-> virtually indistinguishable between churned and retained customers,
-> confirming that EstimatedSalary is unlikely to be a strong predictor.
-> The spread is wide but roughly uniform with minimal outlier behaviour.
+> **Tenure — no visible separation.**  Distributions overlap almost
+> completely between churned and retained, consistent with the uniform
+> shape noted in Section 2.3.
+>
+> **EstimatedSalary — no visible separation.**  Boxplots are virtually
+> indistinguishable between the two groups, confirming low predictive
+> power.
 >
 > **Outlier severity summary:**
 >
 > | Feature | Outlier Pattern | Severity |
 > |---------|----------------|----------|
-> | Age | Many unusually high ages above the upper whisker (~70+) | Moderate — may inflate variance in linear models |
-> | Balance | Very large balances above the upper whisker; zero-balance cluster acts as structural outlier | High — heavy tail + zero-inflation affect multiple model families |
-> | CreditScore | Small number of very low scores (~400) below the lower whisker | Low — few points, weak class separation |
-> | EstimatedSalary | Wide spread but less extreme outlier behaviour than Balance | Low — near-uniform, minimal impact expected |
+> | Age | Upper-tail outliers (~70+) present in both classes, but churned group sits higher overall | Moderate — may inflate variance in linear models |
+> | Balance | Extreme high values above whisker; zero-cluster concentrated in retained group | High — heavy tail + zero-inflation affect multiple model families |
+> | CreditScore | Small number of low scores (~400) below lower whisker | Low — few points, weak class separation |
+> | EstimatedSalary | Wide spread but no class-differentiated outlier pattern | Low — near-uniform, minimal impact expected |
 
 ---
 
