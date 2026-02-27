@@ -130,27 +130,26 @@ Confirm min/max/mean align with what the histograms show.
 
 *Interpretation (fill after running).*
 
-> Figure 2 shows the distributions of five continuous numerical features,
-> highlighting heterogeneity across customers and several modelling
-> pitfalls.
+> The histograms confirm the distribution shapes suggested by the summary
+> statistics and reveal several modelling pitfalls.
 >
-> **Age** is right-skewed with a long upper tail: a small group of older
-> customers (above ~70) sit well beyond the bulk of the distribution.
-> These extreme values may make linear models more sensitive to outliers,
-> pulling coefficients and inflating variance.
+> **Age** is right-skewed, with most customers clustered around working
+> age (~35) and a long upper tail of older customers (above ~70).  These
+> extreme values may pull linear-model coefficients and inflate variance.
 >
-> **Balance** follows a bimodal distribution — **[zero_bal_pct]%** of
-> values are exactly zero, creating a substantial mass at the left edge,
-> while the remaining values form a roughly normal upper spread.  A
-> single linear term cannot represent this two-regime structure and is
-> likely to underfit.
+> **Balance** has a clear spike at zero (**[zero_bal_pct]%** of customers)
+> and a long right tail among non-zero customers, indicating two distinct
+> engagement regimes.  A single linear term cannot represent this
+> bimodal structure and is likely to underfit.
 >
-> **Tenure**, **CreditScore**, and **EstimatedSalary** are approximately
-> uniform.  Uniformity implies weak marginal signal in isolation —
-> no single value range strongly predicts churn on its own — and suggests
-> a greater reliance on feature interactions.  Models that evaluate
-> features independently (e.g., naïve Bayes) may therefore underestimate
-> their contribution.
+> **Tenure** is fairly evenly spread across 0–10 years.
+> **CreditScore** is roughly bell-shaped, suggesting a relatively stable
+> spread of credit quality.  **EstimatedSalary** appears close to
+> uniform.  All three show weak marginal signal in isolation — no single
+> value range strongly predicts churn on its own — suggesting a greater
+> reliance on feature interactions.  Models that evaluate features
+> independently (e.g., naïve Bayes) may therefore underestimate their
+> contribution.
 >
 > Finally, these five features differ substantially in scale (e.g.,
 > Balance in the tens of thousands vs. Tenure in single digits).  Without
@@ -231,36 +230,32 @@ df.groupby("Exited")[["CreditScore", "Age", "Tenure", "Balance",
 
 *Interpretation.*
 
-> **Age — clearest class separation.**  The churned group has a
+> **Age** is the clearest numeric difference.  The churned group has a
 > noticeably higher median and IQR than the retained group, confirming
-> that churn risk increases with age.  The right-skew and upper-tail
-> outliers noted in Section 2.3 are present in both groups, but the
-> entire churned distribution sits higher — this is a strong predictor.
+> that churn risk increases with age.  Several high-age outliers sit
+> beyond the upper whisker in both groups.
 >
-> **Balance — class shift despite bimodality.**  The churned group's
-> median and IQR sit higher than the retained group's.  The
-> zero-inflation spike identified in Section 2.3 appears as a dense
-> cluster of dots near zero in the retained group — suggesting that
-> zero-balance customers churn less, adding predictive signal beyond
-> the shape issue.
+> **Balance** shows a large zero-balance cluster (concentrated in the
+> retained group) and very large values beyond the upper whisker.
+> The churned group's median and IQR sit higher, adding predictive
+> signal — but the extreme spread can mislead models unless handled
+> carefully (e.g., log transform or binary indicator).
 >
-> **CreditScore — weak class separation.**  Medians and IQRs are nearly
-> identical across both classes.  Limited discriminatory power on its
-> own.
+> **CreditScore** and **EstimatedSalary** look very similar for churned
+> and retained customers — medians and IQRs nearly overlap — so they
+> do not separate the two groups well on their own.  CreditScore shows
+> a few low outliers (~400).  However, a weak marginal signal does not
+> rule out usefulness inside a multivariate model, where interactions
+> with other features may still matter.
 >
-> **Tenure — no visible separation.**  Distributions overlap almost
-> completely between churned and retained, consistent with the uniform
-> shape noted in Section 2.3.
->
-> **EstimatedSalary — no visible separation.**  Boxplots are virtually
-> indistinguishable between the two groups, confirming low predictive
-> power.
+> **Tenure** distributions overlap almost completely between the two
+> groups, consistent with limited separation power on its own.
 >
 > **Outlier severity summary:**
 >
 > | Feature | Outlier Pattern | Severity |
 > |---------|----------------|----------|
-> | Age | Upper-tail outliers (~70+) present in both classes, but churned group sits higher overall | Moderate — may inflate variance in linear models |
+> | Age | Upper-tail outliers (~70+) in both classes; churned group sits higher overall | Moderate — may inflate variance in linear models |
 > | Balance | Extreme high values above whisker; zero-cluster concentrated in retained group | High — heavy tail + zero-inflation affect multiple model families |
 > | CreditScore | Small number of low scores (~400) below lower whisker | Low — few points, weak class separation |
 > | EstimatedSalary | Wide spread but no class-differentiated outlier pattern | Low — near-uniform, minimal impact expected |
