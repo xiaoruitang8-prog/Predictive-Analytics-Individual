@@ -101,6 +101,11 @@ lr = LogisticRegression(C=1.0, max_iter=1000, random_state=SEED)
 lr.fit(X_train_t, y_train)
 results.append(evaluate("LogReg", lr, X_val_t, y_val))
 
+lr_bal = LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced",
+                            random_state=SEED)
+lr_bal.fit(X_train_t, y_train)
+results.append(evaluate("LogReg (balanced)", lr_bal, X_val_t, y_val))
+
 print("── Baselines (validation set) ──")
 display(pd.DataFrame(results))
 ```
